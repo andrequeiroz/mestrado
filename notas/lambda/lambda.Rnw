@@ -1,0 +1,188 @@
+\documentclass[a4paper, 12pt, openany]{report}
+\usepackage[top = 2cm, right = 2cm, bottom = 2cm, left = 2cm]{geometry}
+\usepackage[brazilian]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amsmath, amsfonts, amssymb, amsopn, amsthm}
+\usepackage{icomma}
+\usepackage[font=small,skip=0pt]{caption}
+
+\begin{document}
+
+\section*{Estimação da volatilidade via McCormick 2012}
+
+\subsection*{Valores iniciais}
+
+\begin{align*}
+n &= 1.461, & \mu &= -5,4, & \phi &= 0,99, & \sigma^2 &= 0,5^2, \\
+m_0 &= 0, & C_0 &= \frac{\sigma^2}{1 - \phi^2} = \frac{0,5^2}{0,01}\quad e & \lambda_0 &= 1.
+\end{align*}
+
+\subsection*{Funções auxiliares}
+
+\begin{equation}
+l'(h_t^*|y_t, \mu, \phi, m_{t-1}, C_{t-1}, \lambda_t) = -\frac{1}{2} + \frac{y_t^2}{2 e^{h_t^* + \mu}} - \frac{(h_t^* - \phi m_{t-1})\lambda_t}{\phi^2 C_{t-1}}
+\end{equation}
+
+e
+
+\begin{equation}
+l''(h_t^*|y_t, \mu, \phi, C_{t-1}, \lambda_t) = - \frac{y_t^2}{2 e^{h_t^* + \mu}} - \frac{\lambda_t}{\phi^2 C_{t-1}}.
+\end{equation}
+
+\subsection*{Estimando $\lambda_t$}
+
+Achar $\lambda_t$ que maximize $f(\lambda_t)$, onde:
+
+\begin{align}
+f(\lambda_t) &\approx \sqrt{2\pi} \sqrt{\left|\frac{1}{l''(\hat{h_t^*})}\right|} f\left(y_t|D_{t-1}, \hat{h_t^*}\right) f\left(\hat{h_t^*} | D_{t-1}\right),\notag \\
+ &\approx \sqrt{2\pi} \sqrt{\left|\frac{1}{- \frac{y_t^2}{2 e^{m_t + \mu}} - \frac{\lambda_t}{\phi^2 C_{t-1}}}\right|} \times \mathcal{N}\left(0, e^{m_t + \mu}\right) \times \mathcal{N}\left(m_t, \frac{\phi^2C_{t-1}}{\lambda_t}\right) \label{eq:lambda}.
+\end{align}
+
+Note que $\hat{h_t^*} = m_t$ e portanto $f(\lambda_t) = f(\lambda_t |y_t, \mu, \phi, m_t, C_{t-1})$.
+
+\subsection*{Estimando $h_t^*$}
+
+A distribuição de $(h_t^* | D_t)$ será:
+
+\begin{equation}
+(h_t^* | D_t) \sim \mathcal{N}(m_t, C_t),
+\end{equation}
+
+onde
+
+\begin{align}
+m_t &= m_{t-1} - \frac{l'(m_{t-1})}{l''(m_{t-1})} \quad \text{e} \label{eq:m_t}\\
+C_t &= -\frac{1}{l''(m_{t-1})}.
+\end{align}
+
+Então $\hat{h_t^*} = m_t$. Note porém que, no tempo $t$ os valores de $m_t$ e $C_t$ dependem do $\lambda_t$ da maximização através das derivadas. Entretanto $\lambda_t$ depende, do mesmo modo, de $m_t$ e $C_{t-1}$, dando origem a um dependência cíclica entre $m_t$ e $\lambda_t$.
+
+\newpage
+
+\section*{Algumas considerações}
+<<processamento, include = FALSE, echo = FALSE>>=
+library(DBI)
+library(ggplot2)
+
+theme_set(theme_bw())
+
+## dados
+link <- dbConnect(RSQLite::SQLite(), "../../dados/svsim.db")
+dados <- dbGetQuery(link, "SELECT y, h FROM p099s05 WHERE k = 3")
+dbDisconnect(link)
+
+y <- dados[, "y"]
+
+## corrigir y zerado
+y[which(y == 0)] <- 0.000001
+
+## estimação
+## funções auxiliares
+D1 <- function(x, y, mu, phi, m, C, lambda) {
+    R <- phi ** 2 * C / lambda
+    result <- -0.5 + y ** 2 / (2 * exp(x + mu)) - (x - phi * m) / R
+    return(result)
+}
+
+D2 <- function(x, y, mu, phi, C, lambda) {
+    R <- phi ** 2 * C / lambda
+    result <- - y ** 2 / (2 * exp(x + mu)) - 1 / R
+    return(result)
+}
+
+preditiva <- function(x, y, mu, phi, m, C) {
+    R <- phi ** 2 * C / x
+    d1 <- D1(x = m, y, mu, phi, m, C, x)
+    d2 <- D2(x = m, y, mu, phi, C, x)
+    h_star <- m - d1 / d2
+    d2 <- D2(x = h_star, y, mu, phi, C, x)
+    result <- sqrt(2 * pi) * sqrt(abs(1 / d2)) *
+        dnorm(y, 0, sqrt(exp(h_star + mu))) * dnorm(h_star, h_star, sqrt(R))
+    return(result)
+}
+
+## valores iniciais
+n <- length(dados$y)
+mu <- -5.4
+phi <- 0.99
+sigma2 <- 0.5 ** 2
+m <- rep(0, n + 1)
+C <- rep(sigma2 / (1 - phi ** 2), n + 1)
+h <- numeric(n)
+lambda <- rep(1, n + 1)
+
+for (i in 1:n) {
+
+    lambda[i + 1] <- optim(par = lambda[i], fn = preditiva, y = y[i], mu = mu,
+                           phi = phi, m = m[i], C = C[i], lower = 0.0001,
+                           upper = 0.9999, method = "L-BFGS-B",
+                           control = list(fnscale = -1))$par
+
+    Dl1 <- D1(x = m[i], y = y[i], mu = mu, phi = phi, m = m[i],
+              C = C[i], lambda = lambda[i + 1])
+    Dl2 <- D2(x = m[i], y = y[i], mu = mu, phi = phi, C = C[i],
+              lambda = lambda[i + 1])
+    m[i + 1] <- m[i] - Dl1 / Dl2
+    C[i + 1] <- - 1 / Dl2
+    h[i] <- rnorm(1, m[i + 1], sqrt(C[i + 1]))
+}
+@
+
+Eu programei o algoritmo de maneira que, durante a busca pelo $\lambda_t$, o valor de $m_t$ é sempre recalculado. Isto é, eu substituí a equação \eqref{eq:m_t} em \eqref{eq:lambda}, numa tentativa de corrigir a dependência cíclica. O resultado da estimação pode ser visto na Figura \ref{fig:estimacao}.
+
+\begin{figure}[ht]
+\centering
+<<fig1, echo = FALSE, fig.width = 8, fig.height = 2.8, fig.align = "center">>=
+g <- ggplot(data = data.frame(t = rep(1:n, 2), h = c(h, dados[, "h"] - mu),
+                              valor = rep(c("Estimado", "Real"), each = n)))
+g + geom_line(mapping = aes(x = t, y = h, col = valor)) +
+    scale_color_manual(values = c("red", "black"))
+@
+\caption{Valores estimados vs valores reais de $h_t^*$.}
+\label{fig:estimacao}
+\end{figure}
+
+<<reprocessamento, include = FALSE, echo = FALSE>>=
+## resetar os valores
+n <- length(dados$y)
+mu <- -5.4
+phi <- 0.99
+sigma2 <- 0.5 ** 2
+m <- rep(0, n + 1)
+C <- rep(sigma2 / (1 - phi ** 2), n + 1)
+h <- numeric(n)
+lambda <- rep(1, n + 1)
+
+i <- 1
+@
+
+Eu notei que frequentemente os valores ótimos de $\lambda_t$ eram iguais a um, e os gráficos da função preditora era algo semelhante a Figura \ref{fig:preditora}. Assim tive a ideia de estender o eixo x do gráfico, como na Figura \ref{fig:preditora_ext}.
+
+\begin{figure}[ht]
+\centering
+<<fig2, echo = FALSE, fig.width = 6, fig.height = 2.1, fig.align = "center">>=
+c <- ggplot(data = data.frame(lambda = c(0, 1)), mapping = aes(x = lambda))
+c + stat_function(fun = preditiva,
+                  args = list(y = y[i], mu = mu,
+                              phi = phi, m = m[i], C = C[i])) +
+    xlab(expression(lambda))
+@
+\caption{Função preditora.}
+\label{fig:preditora}
+\end{figure}
+
+\begin{figure}[ht]
+\centering
+<<fig3, echo = FALSE, fig.width = 6, fig.height = 2.1, fig.align = "center">>=
+c <- ggplot(data = data.frame(lambda = c(0, 100)), mapping = aes(x = lambda))
+c + stat_function(fun = preditiva,
+                  args = list(y = y[i], mu = mu,
+                              phi = phi, m = m[i], C = C[i])) +
+    xlab(expression(lambda))
+@
+\caption{Função preditora.}
+\label{fig:preditora_ext}
+\end{figure}
+
+\end{document}

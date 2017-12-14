@@ -1,0 +1,631 @@
+\chapter{Modelo de Volatilidade Estocástica}
+
+O modelo de volatilidade estocástica (MVE) surgiu como uma alternativa aos tradicionais modelos ARCH e GARCH, (\cite{engle}; \cite{bollerslev}). Nesse novo modelo, a variabilidade dos dados deixa de ter um padrão determinístico e passa também a ser interpretada como uma variação aleatória. Entretanto, \cite{bos} cita que há uma grande desvantagem dos modelos de volatilidade estocástica em relação aos modelos ARCH e GARCH em termos de aplicações. Isso ocorre pois os modelos tradicionais possuem muitas variações, porém basicamente apenas uma maneira de se estimar os parâmetros, e que está presente em grande parte dos \textit{softwares} com essa finalidade. Já os modelos de volatilidade estocástica apresentam poucas variações, porém diversos autores sugerem maneiras distintas de se estimar os parâmetros, e quase nenhuma delas está disponível facilmente através de algum pacote computacional. A Tabela \ref{mvs:tab_bos} foi extraída do texto supracitado e apresenta de forma sintetizada as principais referências sobre os diversos métodos de estimação já publicados.
+%
+\begin{table}[ht]
+  \centering
+  \caption{Métodos de estimação dos parâmetros do MVE e principais referências, \citep{bos}.}
+  \scalebox{1}{\begin{tabular}{lll}
+    \hline
+    \multicolumn{1}{c}{Método} & \multicolumn{1}{c}{Referência} & \multicolumn{1}{c}{Paradigma} \\
+    \hline
+    Quasi-Maximum Likelihood (QML) & \cite{harvey} & Clássico \\
+    Gaussian Mixture Sampling (GMS) & \cite{kim} & Bayesiano \\
+    Simulated Method of Moments (SMM) & \cite{gallant} & Clássico \\
+    Importance Sampling (IS) & \cite{durbin} & Clássico \\
+    Efficient Importance Sampling (EIS) & \cite{richard} & Clássico \\
+    Improved Importance Sampling (IIS) & \cite{nguyen} & Clássico \\
+    Single Site Sampler (SSS) & \cite{carter} & Bayesiano \\
+    MultiMove Sampler (MMS) & \cite{shephard97} & Bayesiano \\
+    \hline
+  \end{tabular}}
+  \label{mvs:tab_bos}
+\end{table}
+
+\section{Definição do Modelo Canônico}
+
+Essa modelagem foi inicialmente proposta por \cite{taylor}. Ele sugere que o logaritmo do quadrado da volatilidade ao longo do tempo deve ser modelado por um processo latente auto-regressivo de primeira ordem. \cite{kim} apresenta o modelo canônico para dados igualmente espaçados.
+
+O modelo é basicamente composto por uma equação que descreve a variável observada $Y_t$ em função de uma variável latente $h_t$, cuja função é captar a variabilidade dos dados no decorrer do tempo. Essa variável latente é modelada a partir de um modelo auto-regressivo de primeira ordem, AR(1), o que define a segunda parte do modelo de volatilidade estocástica. Assim, para $t = 1, \ldots, N$:
+%
+\begin{equation}
+\text{\textbf{Modelo Canônico}}:
+\begin{cases}
+  Y_t &= e^{\frac{h_t}{2}} \delta_t, \\
+  h_t &= \mu + \phi(h_{t - 1} - \mu) + \eta_t, \\
+  h_0 &\sim \dnormalxt{\mu}{\frac{\sigma_\eta^2}{1 - \phi^2}}{}.
+\end{cases} \label{mvs:mvs}
+\end{equation}
+%
+Os termos $\delta_t$ e $\eta_t$ são ruídos gaussianos, independentes no tempo e entre si, com distribuições:
+%
+\begin{equation}
+  \delta_t \sim \dnormal{0}{1}{} \quad\text{e}\quad \eta_t \sim \dnormalxt{0}{\sigma_\eta^2}{}. \label{mvs:eq_erros}
+\end{equation}
+%
+Observe que, $Y_t \sim \dnormalxt{0}{e^{h_t}}{}$, ou como requerido pelo modelo, a variância das observações é totalmente descrita no tempo $t$ em função da variável latente $h_t$. O conjunto de parâmetros do modelo a serem estimados é definido pelo vetor:
+%
+\begin{equation}
+  \vetor{\psi} = (\mu, \phi, \sigma_\eta^2). \label{mvs:psi}
+\end{equation}
+
+\section{Um Modelo de Espaço-Estado}\label{mvs:sec_ee}
+
+\subsection{Equação das Observações}
+
+Os modelos de volatilidade estocástica podem ser reescritos na notação de espaço-estado proposta por \cite{west}. Uma das vantagens disso é poder utilizar o aparato ferramental e metodológico já implementado computacionalmente (\cite{petrone}; \cite{petris}). Isso é possível a partir da extensão da proposta em \cite{zivot}. Pela definição em \eqref{mvs:mvs}:
+%
+\begin{align}
+  Y_t &= e^{\frac{h_t}{2}} \delta_t, \notag \\
+  \ln Y_t^2 &= h_t + \ln\delta_t^2, \label{mvs:eq_obs_reescrita}
+\end{align}
+%
+O valor esperado da distribuição de $\ln\delta_t^2$ pode ser separado no lado direito da equação \eqref{mvs:eq_obs_reescrita} de modo que $\varepsilon_t \sim (0, \var{\ln\delta_t^2})$ seja um ruído em torno de zero. Assim,
+%
+\begin{equation}
+  \ln Y_t^2 = h_t + \E{\ln \delta_t^2} + \varepsilon_t. \label{mvs:eq_obs_reescrita_ingenua}
+\end{equation}
+
+Apesar dessa transformação linearizar o problema, ela eliminou o ruído gaussiano $\delta_t$. \cite{koopman} afirmam que isso não impede a utilização das técnicas associadas aos modelos gaussianos, uma vez que se assuma a distribuição de $\varepsilon_t$ aproximadamente normal com média zero. Entretanto, \cite{omori} sugere uma mistura de $r = 10$ normais que se aproxima da distribuição do erro na equação \eqref{mvs:eq_obs_reescrita}, $\ln\delta_t^2$, que também será utilizada nesse estudo:
+%
+\begin{equation}
+  f\pxt{\ln\delta_t^2} = \xi_t = \soma{j = 1}{10} w_j \dnormalxt{m_j}{s_j^2}{}. \label{mvs:eq_mistura}
+\end{equation}
+%
+O peso, a média e a variância, $w_j$, $m_j$ e $s_j^2$, respectivamente, das 10 distribuições sugeridas por \cite{omori} são detalhados na Tabela \ref{mvs:tab_mistura}.
+%
+\begin{table}[ht]
+  \centering
+  \caption{Parâmetros da distribuição de $\xi_t$ em \eqref{mvs:eq_mistura}, \citep{omori}.}
+  \begin{tabular}{lrrrrrrrrrr}
+    \hline
+    \multicolumn{1}{c}{$j$} & \multicolumn{1}{c}{1} & \multicolumn{1}{c}{2} & \multicolumn{1}{c}{3} & \multicolumn{1}{c}{4} & \multicolumn{1}{c}{5} & \multicolumn{1}{c}{6} & \multicolumn{1}{c}{7} & \multicolumn{1}{c}{8} & \multicolumn{1}{c}{9} & \multicolumn{1}{c}{10} \\
+    \hline
+    $w_j$ & 0,006 & 0,048 & 0,131 & 0,207 & 0,227 & 0,188 & 0,120 & 0,056 & 0,016 & 0,001 \\
+    $m_j$ & 1,927 & 1,347 & 0,735 & 0,023 & -0,852 & -1,973 & -3,468 & -5,552 & -8,684 & -14,650 \\
+    $s_j^2$ & 0,113 & 0,178 & 0,268 & 0,406 & 0,627 & 0,986 & 1,575 & 2,545 & 4,166 & 7,333 \\
+    \hline
+  \end{tabular}
+  \label{mvs:tab_mistura}
+\end{table}
+
+A Figura \ref{mvs:fig_comparacao_erros} mostra a comparação entre as distribuições de $\ln \delta_t^2$, que é o verdadeiro erro do modelo, de $\varepsilon_t$, que corresponde à aproximação ingênua, e de $\xi_t$, que é a mistura de 10 normais sugerida.
+%
+\begin{figure}[ht]
+\centering
+\begin{minipage}{0.8\linewidth}
+<<mvs-comparacao-erros, eval = TRUE, echo = FALSE, opts.label = "regular_fig">>=
+nm <- norMix(mu = c(1.92677, 1.34744, 0.73504, 0.02266, -0.85173, -1.97278,
+                    -3.46788, -5.55246, -8.68384, -14.65000),
+             sigma = sqrt(c(0.11265, 0.17788, 0.26768, 0.40611, 0.62699,
+                            0.98583, 1.57469, 2.54498, 4.16591, 7.33342)),
+             w = c(0.00609, 0.04775, 0.13057, 0.20674, 0.22715, 0.18842,
+                   0.12047, 0.05591, 0.01575, 0.00115))
+
+data.frame(x = c(-5, 5)) %>%
+    ggplot(aes(x = x)) +
+    stat_function(fun = function(x) exp((x - exp(x)) / 2) / sqrt(2 * pi),
+                  aes(colour = "black")) +
+    stat_function(fun = dnorm, aes(colour = "blue"),
+                  args = list(sd = sqrt(4.935))) +
+    stat_function(fun = dnorMix, aes(colour = "red"),
+                  linetype = "dashed", args = list(obj = nm)) +
+    labs(x = "$\\epsilon$", y = "$f(\\epsilon)$") +
+    scale_colour_manual("", labels = c("$\\ln\\delta_t^2$",
+                                       "$\\varepsilon_t$", "$\\xi_t$"),
+                        values = c("black", "blue", "red")) +
+    theme(legend.position = c(0.90, 0.75))
+@
+\caption{Comparação das distribuições de $\ln \delta_t^2$, $\varepsilon_t$ e $\xi_t$.}
+\label{mvs:fig_comparacao_erros}
+\end{minipage}
+\end{figure}
+
+\subsection{Equação do Sistema}
+
+A equação que define a evolução da variável latente, $h_t$, em \eqref{mvs:mvs} pode ser reescrita:
+%
+\begin{align}
+	h_t &= \mu + \phi(h_{t - 1} - \mu) + \eta_t, \notag\\
+	h_t &= \mu - \phi \mu + \phi h_{t - 1} + \eta_t, \notag\\
+	h_t &= (1 - \phi)\mu + \phi h_{t - 1} + \eta_t. \label{mvs:eq_sistema_reescrita}
+\end{align}
+
+Como essa transformação é um mero rearranjo dos termos, a estrutura gaussiana dos erros em $\eta_t$ não foi perdida, como no caso da equação das observações.
+
+\subsection{Modelo Completo}
+
+Utilizando a notação de espaço-estado para os modelos lineares dinâmicos em \cite{west}, descrita no capítulo \ref{mld}, a equação das observações \eqref{mvs:eq_obs_reescrita} será:
+%
+\begin{align}
+	Y_t &= \vetor{F}'_t \vetor{\theta}_t + \nu_t, \notag\\
+	\ln Y_t^2 &= h_t + \E{\ln \delta_t^2} + \varepsilon_t, \notag \\
+	\ln Y_t^2 &= \begin{bmatrix}1 & 0 & 1\end{bmatrix}\begin{bmatrix}h_t \\ \mu \\ \E{\ln \delta_t^2} \end{bmatrix} + \varepsilon_t. \label{mvs:eq_obs_matrix}
+\end{align}
+%
+Já a equação do sistema \eqref{mvs:eq_sistema_reescrita} será:
+%
+\begin{align}
+	\vetor{\theta}_t &= \vetor{G}_t \vetor{\theta}_{t - 1} + \vetor{\omega}_t, \notag\\
+	h_t &= \phi h_{t - 1} + (1 - \phi)\mu + \eta_t, \notag \\
+	\begin{bmatrix}h_t \\ \mu \\ \E{\ln \delta_t^2} \end{bmatrix} &= \begin{bmatrix}\phi & 1 - \phi & 0 \\ 0 & 1 & 0 \\ 0 & 0 & 1 \end{bmatrix} \begin{bmatrix}h_{t - 1} \\ \mu \\ \E{\ln \delta_t^2} \end{bmatrix} + \begin{bmatrix}\eta_t \\ 0 \\ 0 \end{bmatrix}. \label{mvs:eq_sistema_matrix}
+\end{align}
+%
+Com isso, o modelo de volatilidade estocástica é definido como um modelo de espaço-estado constante através das matrizes:
+%
+\begin{equation}
+	\vetor{\theta}_t = \begin{bmatrix}h_t \\ \mu \\ \E{\ln \delta_t^2}\end{bmatrix},\quad \vetor{F}_t = \vetor{F} = \begin{bmatrix}1 \\ 0 \\ 1\end{bmatrix}\quad\text{e}\quad \vetor{G}_t = \vetor{G} = \begin{bmatrix}\phi & 1 - \phi & 0 \\ 0 & 1 & 0 \\ 0 & 0 & 1\end{bmatrix}. \label{mvs:eq_matrizes}
+\end{equation}
+%
+Os termos que representam os erros nas equações das observações e do sistema são:
+\begin{equation}
+  \nu_t = \varepsilon_t\quad\text{e}\quad \vetor{\omega}_t = \begin{bmatrix}\eta_t \\ 0 \\ 0 \end{bmatrix}. \label{mvs:eq_matrizes_erros}
+\end{equation}
+%
+Consequentemente, as variâncias de $\nu_t$ e $\vetor{\omega}_t$ são definidas, respectivamente, por:
+%
+\begin{equation}
+	V_t = V = \var{\varepsilon_t}\quad\text{e}\quad \vetor{W}_t = \vetor{W} = \begin{bmatrix}\sigma_\eta^2 & 0 & 0 \\ 0 & 0 & 0 \\ 0 & 0 & 0 \end{bmatrix}. \label{mvs:eq_matrizes_var}
+\end{equation}
+%
+A variância $V$ é obtida diretamente através da distribuição de $\varepsilon_t$. A matriz $\vetor{W}$, por sua vez, é determinada a partir da matriz $\vetor{\omega}_t$ em \eqref{mvs:eq_matrizes_erros} e da distribuição de $\eta_t$ em \eqref{mvs:eq_erros}.
+
+Há de se destacar que, apesar de $h_t$ ser a variável que determina a evolução do sistema pela definição do próprio modelo em \eqref{mvs:mvs}, o vetor $\vetor{\theta}_t$, que capta essa característica, só pôde ser escrito em função de $h_t$, do parâmetro a ser estimado $\mu$ e da constante $\E{\ln \delta_t^2}$.
+
+A distribuição \textit{a priori} de $\vetor{\theta}_t$ é definida por $\vetor{\theta}_0 \sim \dnormal{\vetor{m}_0}{\vetor{C}_0}{}$, onde:
+%
+\begin{equation}
+	\vetor{m}_0 = \begin{bmatrix}\mu \\ \mu \\ \E{\ln \delta_t^2} \end{bmatrix}\quad\text{e}\quad \vetor{C}_0 = \begin{bmatrix}\frac{\sigma_\eta^2}{1 - \phi^2} & 0 & 0 \\ 0 & 0 & 0 \\ 0 & 0 & 0 \end{bmatrix}. \label{mvs:eq_var_matrix_priori}
+\end{equation}
+
+\section{Definição do Modelo Bayesiano}
+
+A estimação Bayesiana dos parâmetros do modelo de volatilidade estocástica consiste em determinar a distribuição \textit{a posteriori} de \eqref{mvs:psi}. Apesar de $\vetor{\psi}$ ser um vetor com três elementos, no processo de estimação ele pode ser dividido em blocos. Assim, como \cite{petrone} diz, não é necessário obter a distribuição \textit{a posteriori} conjunta de $\mu$, $\phi$ e $\sigma_\eta^2$. Portanto, foram tomadas três distribuições, uma para cada elemento de $\vetor{\psi}$, independentes entre si.
+
+Como o paradigma Bayesiano sugere, deve-se definir as distribuições \textit{a priori} dos parâmetros. Foram assumidas as distribuições \textit{a priori} conforme \cite{kastner} e \cite{kim}.
+
+O nível $\mu$ da volatilidade tem seu suporte em $\mathbb{R}$, e será atribuída uma distribuição \textit{a priori} com densidade gaussiana para o seu valor:
+%
+\begin{equation}
+  \mu \sim \dnormal{a_\mu}{B_\mu}{}. \label{mvs:priori_mu}
+\end{equation}
+
+O parâmetro $\phi$ determina a persistência da volatilidade, e $\abs{\phi} < 1$. A distribuição beta é bastante flexível e a escolha mais comum quando se deseja modelar alguma variável cujo valor esteja no intervalo $(0, 1)$. Com a finalidade de aproveitar essa vantagem da distribuição beta, seja uma nova variável $\phi_0$ cuja distribuição \textit{a priori} é $\dbeta{a_\phi}{b_\phi}{}$. A persistência então será $\phi = 2\phi_0 - 1$ e sua distribuição \textit{a priori} será:
+%
+\begin{equation}
+  \pi(\phi) = \frac{\Gamma(a_\phi + b_\phi)}{2\Gamma(a_\phi)\Gamma(b_\phi)} \pxt{\frac{1 + \phi}{2}}^{a_\phi - 1} \pxt{\frac{1 - \phi}{2}}^{b_\phi - 1}. \label{mvs:priori_phi}
+\end{equation}
+
+O terceiro e último parâmetro do modelo é $\sigma_\eta^2$, a variância da volatilidade, e seus possíveis valores estão em $\mathbb{R}^+$. Sua distribuição \textit{a priori} será:
+%
+\begin{equation}
+  \sigma_\eta^2 \sim \dgammaxt{\frac{1}{2}}{\frac{1}{2B_\sigma}}{}. \label{mvs:priori_sigma2}
+\end{equation}
+
+\section{Estudo de Simulação}
+
+A fim de avaliar alguns métodos de estimação a seguir, foram criadas populações com dados simulados, conforme a definição em \eqref{mvs:mvs}. As populações se caracterizam pelo produto cruzado dos possíveis valores predeterminados para $\mu$, $\phi$ e $\sigma_\eta^2$ a seguir:
+%
+\begin{itemize}
+
+	\item $\mu \in \{-5,4\}$,
+	
+	\item $\phi \in \{0,0; 0,65; 0,99\}$,
+	
+	\item $\sigma_\eta^2 \in \{0,1^2; 0,3^2; 0,5^2\}$.
+	
+\end{itemize}
+
+No caso de $\mu$, a opção de se trabalhar com um único valor fixado é devido ao conhecimento prévio de que tal parâmetro não apresenta maiores dificuldades técnicas em sua estimação, \cite{stochvol}.
+
+Foram gerados 64 conjuntos de dados para cada um dos nove possíveis valores distintos de $\vetor{\psi} = (\mu, \phi, \sigma_\eta^2)$. Todas as populações tinham o mesmo tamanho de $n = 4 \times 365,25 = 1.461$ elementos, o que corresponde a quatro anos de observações diárias. A geração dos dados bem como os cálculos computacionais de estimação foram todos implementados em R \citep{r}. O Código \ref{mvs:sv_data} no apêndice \ref{chpt:sc} apresenta a função \verb=sv_data= que é responsável por gerar os dados simulados do modelo de volatilidade estocástica descrito em \ref{mvs:mvs}. Essa função possui quatro parâmetros: o tamanho da amostra desejada \verb=n=, o valor \verb=mu= do nível $\mu$, o valor \verb=phi= da persistência $\phi$ e o valor \verb=sigma= do desvio padrão $\sigma_\eta$. O resultado da função é um objeto do tipo \verb=data.frame=, que na verdade é um conjunto de dados com os valores simulados \verb=y= da variável observada $Y_t$ e \verb=h= da variável latente $h_t$.
+
+A Figura \ref{mvs:fig_mvs_ex} mostra um exemplo de um conjunto de dados simulados com a persistência extremamente alta, $\phi = 0,99$, e a volatilidade a maior possível do arranjo proposto, $\sigma_\eta^2 = 0,5^2$.
+%
+\begin{figure}[ht]
+\centering
+\begin{minipage}{0.8\linewidth}
+<<mvs-ex, eval = TRUE, echo = FALSE, opts.label = "regular_fig">>=
+link <- dbConnect(RSQLite::SQLite(), "../../../dados/svsim.db")
+
+"SELECT y AS a, h AS b
+ FROM p099s05
+ WHERE k = 8" %>%
+    dbGetQuery(link, .) %>%
+    tidyr::gather(ind, values) %>%
+    mutate(t = 1:n(), t = ifelse(ind == "b", t - n() / 2, t)) %>%
+    ggplot(aes(x = t, y = values, col = ind)) +
+    geom_line(size = 0.5) + labs(x = "$t$", y = "") +
+    scale_colour_manual("", labels = c("$y_t$", "$h_t$"),
+                        values = c("black", "red")) +
+    theme(legend.position = c(0.90, 0.75))
+@
+\caption{Conjunto de dados simulados a partir do modelo \eqref{mvs:mvs}, $\mu = -5,4$, $\phi = 0,99$ e $\sigma_\eta^2 = 0,5^2$.}
+\label{mvs:fig_mvs_ex}
+\end{minipage}
+\end{figure}
+
+Devido a complexidade do modelo, formas fechadas para as distribuições \textit{a posteriori} dos parâmetros não são obtidas trivialmente. Portanto, num primeiro momento, serão utilizados algoritmos baseados em métodos de Monte Carlo em cadeias de Markov (MCMC) para a obtenção de observações das distribuições \textit{a posteriori} de $\mu$, $\phi$ e $\sigma_\eta^2$.
+
+\subsection{Amostrador de Gibbs via JAGS} \label{mvs:sec_jags}
+
+O método de estimação dos parâmetros inicialmente testado será baseado no amostrador de Gibbs através de sua implementação no \textit{software} JAGS, \cite{jags}. JAGS é um acrônimo para a expressão em inglês \textit{\textbf{J}ust \textbf{A}nother \textbf{G}ibbs \textbf{S}ampler}, e sua escolha foi motivada por dois fatores.
+
+O primeiro motivo é em relação ao desenvolvimento e manutenção do programa. Enquanto a solução mais tradicional, WinBUGS \citep{winbugs}, foi descontinuada em 2007, o desenvolvimento do JAGS permanece ativo. Assim, a princípio, é um programa menos suscetível a \textit{bugs} ou outros problemas. O segundo fator é devido a ótima integração com o R, através do pacote \verb=R2jags= \citep{R2jags-package}.
+
+O JAGS, apesar de integrado ao R, possui uma linguagem própria, descrita em \cite{jags-manual}. As variáveis do modelo estudado devem ser declaradas segundo a sua natureza (determinística ou estocástica). Sua sintaxe é muito parecida com R. Contudo, deve-se tomar cuidado quanto à implementação das distribuições. A normal, por exemplo, foi programada a partir de sua precisão ($\tau = \sigma^{-2}$).
+
+O código fonte do modelo canônico de volatilidade estocástica \eqref{mvs:mvs} em JAGS está no Código \ref{mvs:jags_model} do apêndice \ref{chpt:sc}. As distribuições de $Y_t$ e $h_t$, que são a base dessa implementação são:
+%
+\begin{align}
+  Y_t &\sim \dnormalxt{0}{e^{h_t}}{} \text{ e } \label{mvs:dist_jags_y} \\
+  \pxt{h_t | h_{t - 1}} &\sim \dnormalxt{\mu + \phi (h_{t-1} - \mu)}{\sigma_\eta^2}{}. \label{mvs:dist_jags_h}
+\end{align}
+
+Em cada população simulada, os parâmetros $\mu$, $\phi$ e $\sigma_{\eta}^2$ foram estimados com base no seguinte procedimento. \label{mvs:jags_procedure}O modelo foi calibrado através de um \textit{burn-in} igual a 5.000. Então, mais 10.000 iterações foram executadas, e uma a cada 10 observações foi salva. Resultando, assim, numa amostra \textit{a posteriori} de tamanho 1.000 para cada um dos três parâmetros em cada população.
+
+As distribuições \textit{a priori} dos parâmetros \eqref{mvs:priori_mu}, \eqref{mvs:priori_phi} e \eqref{mvs:priori_sigma2} foram definidas como:
+%
+\begin{equation}
+\mu \sim \dnormal{0}{100}{},\quad \phi_0 \sim \dbeta{1}{1}{}\quad\text{e}\quad \sigma_\eta^2 \sim \dgammaxt{\frac{1}{2}}{\frac{1}{2}}{}.\label{mvs:priori_jags}
+\end{equation}
+
+Os parâmetros da \textit{priori} de $\mu$, em geral, não influenciam no seu processo de estimação. Como cita \cite{stochvol}, a verossimilhança carrega informação suficiente para estimar $\mu$ com sucesso.
+
+Para $\phi$ foi adotada inicialmente uma \textit{priori} não informativa, contrário ao recomendado por \cite{kim}, que alega que uma \textit{priori} vaga pode gerar problemas de estimação quando os dados forem próximos da não-estacionariedade.
+
+O parâmetro da distribuição de $\sigma_\eta^2$ foi escolhido de maneira que uma massa considerável de probabilidade estivesse concentrada no intervalo $(0, 1)$.
+
+<<jags, eval = TRUE, results = "hide", echo = FALSE>>=
+"SELECT p AS phi, s AS sigma, k, AVG(mu) AS mu_hat, AVG(phi) AS phi_hat,
+  AVG(sigma) AS sigma_hat
+  FROM jags
+  GROUP BY p, s, k" %>%
+    dbGetQuery(link, .) -> dados_jags
+
+dados_jags %>%
+    group_by(phi, sigma) %>%
+    summarise(media_mu = mean(mu_hat), min_mu = min(mu_hat),
+              median_mu = median(mu_hat), max_mu = max(mu_hat),
+              sd_mu = sd(mu_hat), media_phi = mean(phi_hat),
+              min_phi = min(phi_hat), median_phi = median(phi_hat),
+              max_phi = max(phi_hat), sd_phi = sd(phi_hat),
+              media_sigma = mean(sigma_hat), min_sigma = min(sigma_hat),
+              median_sigma = median(sigma_hat), max_sigma = max(sigma_hat),
+              sd_sigma = sd(sigma_hat)) %>%
+    ungroup() %>%
+    mutate_at(vars(contains("_")), funs(round(., 3))) -> dados_jags_tab
+
+dbDisconnect(link)
+@
+
+Após o procedimento computacional, os resultados foram compilados e podem ser observados nas figuras e tabelas que seguem.
+
+A Figura \ref{mvs:fig_jags_mu} mostra as distribuições das médias estimadas de $\mu$, $\bar\mu$, para os 64 conjuntos de dados simulados a partir dos nove possíveis valores de $\vetor{\psi}$. Levando em consideração que o valor real de $\mu$ é -5,4, a estimação do parâmetro, quando $\phi = 0,99$, foi a pior de todas. O valor não parece viesado, porém apresentou a maior dispersão entre os demais. A Tabela \ref{mvs:tab_jags_mu} mostra a média, o mínimo, a mediana, o máximo e o desvio padrão dos valores estimados $\bar\mu$, respectivamente.
+
+A Figura \ref{mvs:fig_jags_phi} mostra que quando a persistência $\phi$ é elevada, o valor real desse parâmetro é  razoavelmente estimado. Valores intermediários de $\phi$ são estimados com maior precisão a medida que o valor da volatilidade, $\sigma_\eta^2$, aumenta. Quando a persistência é inexistente, $\phi = 0$, os valores estimados do parâmetro são, em média, não viesados, no entanto, apresentam alta dispersão. A Tabela \ref{mvs:tab_jags_phi} mostra novamente a média, o mínimo, a mediana, o máximo e o desvio padrão dos valores estimados $\bar\phi$, respectivamente.
+
+A Figura \ref{mvs:fig_jags_sigma} mostra que a volatilidade, $\sigma_\eta^2$, somente é estimada de maneira aceitável quando o valor de $\phi$ é próximo de um, pois a distribuição dos valores estimados de $\sigma_\eta$ torna-se leptocúrtica com moda em torno de $\sigma_\eta$ real. A Tabela \ref{mvs:tab_jags_sigma} mostra as estatísticas de $\bar\sigma_\eta$ que comprovam essa afirmação.
+
+\newpage
+\begin{figure}[ht]
+\centering
+\begin{minipage}{0.8\linewidth}
+<<jags-mu, eval = TRUE, echo = FALSE, opts.label = "regular_fig">>=
+dados_jags %>%
+    filter(sigma == 0.1) %>%
+    ggplot() +
+    geom_density(aes(x = mu_hat, fill = factor(phi)), alpha = 0.6) +
+    geom_vline(xintercept = -5.4) +
+    labs(title = "$\\sigma_\\eta = 0,1$", x = "$\\bar\\mu$",
+         y = "Densidade", fill = "$\\phi$")
+
+dados_jags %>%
+    filter(sigma == 0.3) %>%
+    ggplot() +
+    geom_density(aes(x = mu_hat, fill = factor(phi)), alpha = 0.6) +
+    geom_vline(xintercept = -5.4) +
+    labs(title = "$\\sigma_\\eta = 0,3$", x = "$\\bar\\mu$",
+         y = "Densidade", fill = "$\\phi$")
+
+dados_jags %>%
+    filter(sigma == 0.5) %>%
+    ggplot() +
+    geom_density(aes(x = mu_hat, fill = factor(phi)), alpha = 0.6) +
+    geom_vline(xintercept = -5.4) +
+    labs(title = "$\\sigma_\\eta = 0,5$", x = "$\\bar\\mu$",
+         y = "Densidade", fill = "$\\phi$")
+@
+\caption{Valores de $\bar\mu$ estimados através do amostrador de Gibbs para o conjunto das populações de dados simulados.}
+\label{mvs:fig_jags_mu}
+\end{minipage}
+\end{figure}
+%
+\newpage
+%
+\begin{figure}[ht]
+\centering
+\begin{minipage}{0.8\linewidth}
+<<jags-phi, eval = TRUE, echo = FALSE, opts.label = "regular_fig">>=
+dados_jags %>%
+    filter(phi == 0) %>%
+    ggplot() +
+    geom_density(aes(x = phi_hat, fill = factor(sigma)), alpha = 0.6) +
+    geom_vline(xintercept = 0) +
+    labs(title = "$\\phi = 0$", x = "$\\bar\\phi$",
+         y = "Densidade", fill = "$\\sigma_\\eta$")
+
+dados_jags %>%
+    filter(phi == 0.65) %>%
+    ggplot() +
+    geom_density(aes(x = phi_hat, fill = factor(sigma)), alpha = 0.6) +
+    geom_vline(xintercept = 0.65) +
+    labs(title = "$\\phi = 0,65$", x = "$\\bar\\phi$",
+         y = "Densidade", fill = "$\\sigma_\\eta$")
+
+dados_jags %>%
+    filter(phi == 0.99) %>%
+    ggplot() +
+    geom_density(aes(x = phi_hat, fill = factor(sigma)), alpha = 0.6) +
+    geom_vline(xintercept = 0.99) +
+    labs(title = "$\\phi = 0,99$", x = "$\\bar\\phi$",
+         y = "Densidade", fill = "$\\sigma_\\eta$")
+@
+\caption{Valores de $\bar\phi$ estimados através do amostrador de Gibbs para o conjunto das populações de dados simulados.}
+\label{mvs:fig_jags_phi}
+\end{minipage}
+\end{figure}
+%
+\newpage
+%
+\begin{figure}[ht]
+\centering
+\begin{minipage}{0.8\linewidth}
+<<jags-sigma, eval = TRUE, echo = FALSE, opts.label = "regular_fig">>=
+dados_jags %>%
+    filter(sigma == 0.1) %>%
+    ggplot() +
+    geom_density(aes(x = sigma_hat, fill = factor(phi)), alpha = 0.6) +
+    geom_vline(xintercept = 0.1) +
+    labs(title = "$\\sigma_\\eta = 0,1$", x = "$\\bar\\sigma_\\eta$",
+         y = "Densidade", fill = "$\\phi$")
+
+dados_jags %>%
+    filter(sigma == 0.3) %>%
+    ggplot() +
+    geom_density(aes(x = sigma_hat, fill = factor(phi)), alpha = 0.6) +
+    geom_vline(xintercept = 0.3) +
+    labs(title = "$\\sigma_\\eta = 0,3$", x = "$\\bar\\sigma_\\eta$",
+         y = "Densidade", fill = "$\\phi$")
+
+dados_jags %>%
+    filter(sigma == 0.5) %>%
+    ggplot() +
+    geom_density(aes(x = sigma_hat, fill = factor(phi)), alpha = 0.6) +
+    geom_vline(xintercept = 0.5) +
+    labs(title = "$\\sigma_\\eta = 0,5$", x = "$\\bar\\sigma_\\eta$",
+         y = "Densidade", fill = "$\\phi$")
+@
+\caption{Valores de $\bar\sigma_\eta$ estimados através do amostrador de Gibbs para o conjunto das populações de dados simulados.}
+\label{mvs:fig_jags_sigma}
+\end{minipage}
+\end{figure}
+%
+\newpage
+%
+\begin{table}
+  \centering
+  \caption{Principais estatísticas dos valores estimados $\bar\mu$ através do amostrador de Gibbs para o conjunto de populações de dados simulados.}
+  \begin{tabular}{rr|rrrrr}
+    \hline
+    \multicolumn{1}{c}{$\phi_\text{real}$} & \multicolumn{1}{c|}{$\sigma_{\eta_\text{real}}$} & $\text{média}(\bar\mu)$ & $\text{mín}(\bar\mu)$ & $\text{Md}(\bar\mu)$ & $\text{máx}(\bar\mu)$ & $\sigma_{\bar\mu}$\\
+    \hline
+<<tabela1, include = TRUE, echo = FALSE, results = "asis">>=
+for (i in 1:nrow(dados_jags_tab)) {
+    cat(as.numeric(dados_jags_tab[i, 1]), "& ")
+    cat(as.numeric(dados_jags_tab[i, 2]))
+    for (j in 3:7) {
+        cat(" &", format(as.numeric(dados_jags_tab[i, j]), nsmall = 3))
+    }
+    cat(" \\\\\n")
+    if (i %% 3 == 0) {
+        cat("\\hline\n")
+    }
+}
+@
+  \end{tabular}
+  \label{mvs:tab_jags_mu}
+\end{table}
+
+\begin{table}
+  \centering
+  \caption{Principais estatísticas dos valores estimados $\bar\phi$ através do amostrador de Gibbs para o conjunto de populações de dados simulados.}
+  \begin{tabular}{rr|rrrrr}
+    \hline
+    \multicolumn{1}{c}{$\phi_\text{real}$} & \multicolumn{1}{c|}{$\sigma_{\eta_\text{real}}$} & $\text{média}(\bar\phi)$ & $\text{mín}(\bar\phi)$ & $\text{Md}(\bar\phi)$ & $\text{máx}(\bar\phi)$ & $\sigma_{\bar\phi}$\\
+    \hline
+<<tabela2, include = TRUE, echo = FALSE, results = "asis">>=
+for (i in 1:nrow(dados_jags_tab)) {
+    cat(as.numeric(dados_jags_tab[i, 1]), "& ")
+    cat(as.numeric(dados_jags_tab[i, 2]))
+    for (j in 8:12) {
+        cat(" &", format(as.numeric(dados_jags_tab[i, j]), nsmall = 3))
+    }
+    cat(" \\\\\n")
+    if (i %% 3 == 0) {
+        cat("\\hline\n")
+    }
+}
+@
+  \end{tabular}
+  \label{mvs:tab_jags_phi}
+\end{table}
+
+\begin{table}
+  \centering
+  \caption{Principais estatísticas dos valores estimados $\bar\sigma_\eta$ através do amostrador de Gibbs para o conjunto de populações de dados simulados.}
+  \begin{tabular}{rr|rrrrr}
+    \hline
+    \multicolumn{1}{c}{$\phi_\text{real}$} & \multicolumn{1}{c|}{$\sigma_{\eta_\text{real}}$} & $\text{média}(\bar\sigma_\eta)$ & $\text{mín}(\bar\sigma_\eta)$ & $\text{Md}(\bar\sigma_\eta)$ & $\text{máx}(\bar\sigma_\eta)$ & $\sigma_{\bar\sigma_\eta}$\\
+    \hline
+<<tabela3, include = TRUE, echo = FALSE, results = "asis">>=
+for (i in 1:nrow(dados_jags_tab)) {
+    cat(as.numeric(dados_jags_tab[i, 1]), "& ")
+    cat(as.numeric(dados_jags_tab[i, 2]))
+    for (j in 13:17) {
+        cat(" &", format(as.numeric(dados_jags_tab[i, j]), nsmall = 3))
+    }
+    cat(" \\\\\n")
+    if (i %% 3 == 0) {
+        cat("\\hline\n")
+    }
+}
+@
+\end{tabular}
+  \label{mvs:tab_jags_sigma}
+\end{table}
+
+\newpage\clearpage
+
+\section{Um Exemplo com Dados Reais}
+
+O amostrador de Gibbs via JAGS, aplicado anteriormente em dados simulados, foi utilizado para replicar o estudo em \cite{achcar}. No referido artigo, os autores propõem dois modelos de volatilidade estocástica levemente diferente do modelo canônico em \ref{mvs:mvs} para estudar a concentração de ozônio na Cidade do México. A base de dados corresponde a 16 anos (1$^\circ$ de janeiro 1990 a 31 de dezembro 2005) de medições da média semanal do nível diário máximo de ozônio em cinco regiões da Cidade do México.
+
+Em ambos os caso, a variável aleatória de interesse, $X_t$, é a concentração de ozônio no ar da Cidade do México em partes por milhão (ppm) aferida no tempo $t = 1, \ldots, N$ em $j = 1, \ldots, K$ regiões. Entretanto a variável, $Y_t$, a ser modelada é a série de log-retornos de $X_t$, e é definida, na região $j$, por:
+%
+\begin{equation}
+	Y_{j, t} = \ln \pxt{\frac{X_{j, t}}{X_{j, t - 1}}}, \quad t = 1, \ldots, N. \label{o3:eq_log-return}
+\end{equation}
+
+\subsection{Modelo I} \label{o3:sec_m1}
+
+Os autores definem o primeiro modelo, no tempo $t = 1, \ldots, N$ e na região $j = 1, \ldots, K$, como:
+%
+\begin{equation}
+\text{\textbf{Modelo I}}:
+\begin{cases}
+  Y_{j, t} \sim \dnormalxt{0}{e^{h_{j, t}}}{}\\
+  h_{j, t} =
+  \begin{cases}
+	  \mu_j + \eta_{j, t}, &\quad t = 1,\\
+	  \mu_j + \phi_j(h_{j, t - 1} - \mu_j) + \eta_{j, t}, &\quad t = 2, \ldots, N.
+  \end{cases}
+\end{cases} \label{o3:m1}
+\end{equation}
+%
+onde $h_{j, t}$ é a variável latente que contabiliza a volatilidade do sistema no tempo $t$ e na região $j$, e um modelo AR(1) é utilizado para representar a evolução dessa variável. Os parâmetros $\mu_j$ e $\phi_j$ representam o nível e a persistência dos log-retornos, respectivamente. O termo $\eta_{j, t}$ é um ruído aleatório com distribuição $\dnormalxt{0}{\sigma_{\eta_j}^2}{}$, e, em $t = 1, \ldots, N$, são independentes entre si.
+
+Essa definição difere um pouco do modelo canônico enunciado em \cite{kim} e sintetizada em \eqref{mvs:mvs}. A parte auto-regressiva que modela a volatilidade nessa nova definição não leva em consideração a distribuição \textit{a priori} de $h_{j,0}$ como em \eqref{mvs:mvs}. Nesse caso, é como se \textit{a priori} da volatilidade fosse no tempo $t = 1$ e definida por:
+%
+\begin{equation}
+    h_{j, 1} \sim \dnormalxt{\mu_j}{\sigma_{\eta_j}^2}{}. \label{o3:priori_h}
+\end{equation}
+
+Os valores de $\mu_j$, $\phi_j$ e $\sigma_{\eta_j}^2$ devem ser estimados. Para tanto, foram assumidas as mesmas distribuições \textit{a priori} dos parâmetros definidas em \eqref{mvs:priori_mu}, \eqref{mvs:priori_phi} e \eqref{mvs:priori_sigma2}.
+
+O Código \ref{o3:model1} no apêndice \ref{chpt:sc} mostra a tradução em JAGS do modelo I, \eqref{o3:m1}.
+
+\subsection{Modelo II}
+
+O segundo modelo se difere do primeiro, \eqref{o3:m1}, apenas na variância de $Y_{j, t}$. Um termo com a finalidade de captar um efeito comum à volatilidade de todas as regiões é adicionado. Assim, o modelo II, no tempo $t = 1, \ldots, N$ e na região $j = 1, \ldots, K$, é:
+%
+\begin{equation}
+\text{\textbf{Modelo II}}:
+\begin{cases}
+  Y_{j, t} \sim \dnormalxt{0}{e^{h_{j, t} + \omega_t}}{}.\\
+  h_{j, t} =
+  \begin{cases}
+	  \mu_j + \eta_{j, t}, &\quad t = 1,\\
+	  \mu_j + \phi_j(h_{j, t - 1} - \mu_j) + \eta_{j, t}, &\quad t = 2, \ldots, N, \\
+  \end{cases} \\
+  \omega_t \sim \dnormalxt{0}{\sigma_\omega^2}{}.
+\end{cases} \label{o3:m2}
+\end{equation}
+%
+Como $\eta_t$ em \eqref{mvs:mvs}, a variável $\omega_t$ tem distribuição $\dnormalxt{0}{\sigma_\omega^2}{}$ independente no tempo, e sua variância $\sigma_\omega^2$ deve ser estimada. Sua distribuição \textit{a priori} é definida de forma semelhante àquela de $\sigma_\eta^2$ em \eqref{mvs:priori_sigma2}:
+%
+\begin{equation}
+  \sigma_\omega^2 \sim \dgammaxt{\frac{1}{2}}{\frac{1}{2B_{\sigma_\omega}}}{}. \label{mvs:priori_sigmaomega}
+\end{equation}
+%
+Os demais parâmetros e variáveis em \eqref{o3:m2} são idênticos àqueles já definidos no modelo I na seção \ref{o3:sec_m1}.
+
+O código fonte do modelo II definido em \eqref{o3:m2} está no Código \ref{o3:model2} no apêndice \ref{chpt:sc}.
+
+\section{Estimação dos parâmetros}
+
+A estimação dos parâmetros foi feita da mesma maneira que aquela para dados simulados descrita na seção \ref{mvs:sec_jags}. Foi utilizado o amostrador de Gibbs via JAGS e o procedimento foi idêntico ao já descrito na página \pageref{mvs:jags_procedure}. Em suma, foi feito um \textit{burn-in} de 5.000 iterações, seguido de mais 10.000. Dessas uma a cada 10 amostras dos parâmetros foi salva, resultando assim, numa amostra final de 1.000 observações de cada um dos parâmetros do modelo.
+
+<<jags-o3, eval = TRUE, results = "hide", echo = FALSE>>=
+link <- dbConnect(RSQLite::SQLite(), "../../../dados/o3.db")
+
+"SELECT * FROM jags" %>%
+    dbGetQuery(link, .) %>%
+    group_by(model, region) %>%
+    summarise(media_mu = mean(mu), dp_mu = sd(mu), min_mu = quantile(mu, 0.025),
+              max_mu = quantile(mu, 0.975)) -> dados_o3_tab
+
+dbDisconnect(link)
+@
+
+Os valores estimados dos parâmetros foram obtidos através da média \textit{a posteriori} e correspondentes estimativa de desvio-padrão.
+
+A Tabela \ref{o3:tab_jags_modelo1} sumariza a comparação entre os valores estimados dos parâmetros em \cite{achcar} com aqueles obtidos através da replicação do modelo I, \eqref{o3:m1}, e do modelo canônico, \eqref{mvs:mvs}. Já a Tabela \ref{o3:tab_jags_modelo2} faz o mesmo, porém tendo por base o modelo II, \eqref{o3:m2}.
+
+Na primeira linha de cada parâmetro nas tabelas \ref{o3:tab_jags_modelo1} e \ref{o3:tab_jags_modelo2} são apresentados os valores estimados obtidos na implementação via WinBUGS em \cite{achcar}, que até onde se percebe, foi feita de maneira equivocada. Talvez devido a uma pequena desatenção, pois foi utilizada uma parametrização da variância diferente daquela descrita no manual do \textit{software} utilizado (\cite{winbugs} e \cite{jags-manual}). Nas referidas tabelas essa parametrização indevida é representada por $\sigma^2$.
+
+Na segunda linha de cada parâmetro nas tabelas \ref{o3:tab_jags_modelo1} e \ref{o3:tab_jags_modelo2} são mostrados os valores estimados dos parâmetros para o modelo I e II, respectivamente, obtidos com a parametrização das variâncias que está de acordo com os manuais do WinBUGS e do JAGS, representada por $1/\sigma^2$.
+
+Na segunda linha de cada parâmetro nas tabelas \ref{o3:tab_jags_modelo1} e \ref{o3:tab_jags_modelo2} são apresentados os valores estimados dos parâmetros pelo modelo canônico.
+
+\begin{table}[ht]
+  \centering
+  \caption{Comparação entre valores estimados dos parâmetros do modelo I em \cite{achcar} e do modelo canônico para a região NW.}
+  \scalebox{1}{\begin{tabular}{cclc|rrr}
+    \hline
+    \multicolumn{1}{c}{Região} & \multicolumn{1}{c}{Parâmetro} & \multicolumn{1}{c}{Modelo} & \multicolumn{1}{c|}{Parame-} & \multicolumn{1}{c}{Valor} &  \multicolumn{1}{c}{Desvio} & \multicolumn{1}{c}{95\% Int. de} \\
+    \multicolumn{1}{c}{} & \multicolumn{1}{c}{} & \multicolumn{1}{c}{} & \multicolumn{1}{c|}{trização} & \multicolumn{1}{c}{estimado} &  \multicolumn{1}{c}{padrão} & \multicolumn{1}{c}{Credibilidade} \\
+    \hline    
+      NW & $\mu$ & Modelo I & $\sigma^2$ & -2,817 & 0,075 & (-2,972; -2,670) \\
+      & & Modelo I & $1/\sigma^2$ & -2,796 & 0,080 & (-2,950; -2,635)\\
+      & & M. Canônico & $1/\sigma^2$ & -2,789 & 0,078 & (-2.947; -2.631) \\
+      \cline{2-7}
+      & $\phi$ & Modelo I & $\sigma^2$ & 0,690 & 0,086 & (0,498; 0,830) \\
+      & & Modelo I & $1/\sigma^2$ & 0,791 & 0,076 & (0,628; 0,912) \\
+      & & M. Canônico & $1/\sigma^2$ & 0,775 & 0,093 & (0,546; 0,903) \\
+      \cline{2-7}
+      & $\sigma_\eta$ & Modelo I & $\sigma^2$ & 5,413 & 1,420 & (3,092; 8,610) \\
+      & & Modelo I & $1/\sigma^2$ & 0,336 & 0,077 & (0,203; 0,500) \\
+      & & M. Canônico & $1/\sigma^2$ & 0,327 & 0,075 & (0,214; 0,485) \\
+    \hline
+  \end{tabular}}
+  \label{o3:tab_jags_modelo1}
+\end{table}
+
+\begin{table}[ht]
+  \centering
+  \caption{Comparação entre valores estimados dos parâmetros do modelo II em \cite{achcar} e do modelo canônico para a região NW.}
+  \scalebox{1}{\begin{tabular}{cclc|rrr}
+    \hline
+    \multicolumn{1}{c}{Região} & \multicolumn{1}{c}{Parâmetro} & \multicolumn{1}{c}{Modelo} & \multicolumn{1}{c|}{Parame-} & \multicolumn{1}{c}{Valor} &  \multicolumn{1}{c}{Desvio} & \multicolumn{1}{c}{95\% Int. de} \\
+    \multicolumn{1}{c}{} & \multicolumn{1}{c}{} & \multicolumn{1}{c}{} & \multicolumn{1}{c|}{trização} & \multicolumn{1}{c}{estimado} &  \multicolumn{1}{c}{padrão} & \multicolumn{1}{c}{Credibilidade} \\
+    \hline    
+      NW & $\mu$ & Modelo II & $\sigma^2$ & -3,008 & 0,072 & (-3,148; -2,854) \\
+      & & Modelo II & $1/\sigma^2$ & -2,993 & 0,045 & (-3,063; -2,902) \\
+      & & M. Canônico & $1/\sigma^2$ & -3,000 & 0,055 & (-3.094; -2.871) \\
+      \cline{2-7}
+      & $\phi$ & Modelo II & $\sigma^2$ & 0,300 & 0,184 & (0,021; 0,700) \\
+      & & Modelo II & $1/\sigma^2$ & 0,009 & 0,504 & (-0,755; 0,892) \\
+      & & M. Canônico & $1/\sigma^2$ & -0,254 & 0,544 & (-0,915; 0,833) \\
+      \cline{2-7}
+      & $\sigma_\eta$ & Modelo II & $\sigma^2$ & 8,755 & 2,172 & (5,027; 13,490) \\
+      & & Modelo II & $1/\sigma^2$ & 0,036 & 0,025 & (0,010; 0,086) \\
+      & & M. Canônico & $1/\sigma^2$ & 0,055 & 0,027 & (0,020; 0,126) \\
+      \hline
+      - & $\sigma_\omega$ & Modelo II & $\sigma^2$ & 1,279 & 0,106 & (1,091; 1,512) \\
+      & & Modelo II & $1/\sigma^2$ & 0,912 & 0,036 & (0,843; 0,983) \\
+      & & M. Canônico & $1/\sigma^2$ & 0,916 & 0,034 & (0,848; 0,983) \\
+    \hline
+  \end{tabular}}
+  \label{o3:tab_jags_modelo2}
+\end{table}

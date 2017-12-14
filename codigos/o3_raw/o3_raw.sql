@@ -1,0 +1,55 @@
+PRAGMA foreign_keys = ON;
+
+CREATE TABLE stations (
+  codStation INTEGER PRIMARY KEY,
+  lbStation TEXT UNIQUE NOT NULL,
+  region TEXT
+);
+
+CREATE TABLE ozone (
+  infoDay TEXT NOT NULL,
+  infoHour INTEGER NOT NULL,
+  codStation INTEGER NOT NULL,
+  ozone REAL,
+  FOREIGN KEY (codStation) REFERENCES stations(codStation)
+);
+
+BEGIN TRANSACTION;
+INSERT INTO stations VALUES(1, 'ACO', 'NE');
+INSERT INTO stations VALUES(2, 'ATI', 'NW');
+INSERT INTO stations VALUES(3, 'AZC', 'NW');
+INSERT INTO stations VALUES(4, 'BJU', 'CE');
+INSERT INTO stations VALUES(5, 'CAM', 'NW');
+INSERT INTO stations VALUES(6, 'CCA', NULL);
+INSERT INTO stations VALUES(7, 'CES', 'SE');
+INSERT INTO stations VALUES(8, 'CHO', 'SE');
+INSERT INTO stations VALUES(9, 'COY', 'SW');
+INSERT INTO stations VALUES(10, 'CUA', 'SW');
+INSERT INTO stations VALUES(11, 'CUT', NULL);
+INSERT INTO stations VALUES(12, 'FAC', NULL);
+INSERT INTO stations VALUES(13, 'HAN', 'CE');
+INSERT INTO stations VALUES(14, 'HGM', NULL);
+INSERT INTO stations VALUES(15, 'IZT', 'CE');
+INSERT INTO stations VALUES(16, 'LAG', 'CE');
+INSERT INTO stations VALUES(17, 'LLA', 'NE');
+INSERT INTO stations VALUES(18, 'LPR', 'NE');
+INSERT INTO stations VALUES(19, 'MER', 'CE');
+INSERT INTO stations VALUES(20, 'MON', NULL);
+INSERT INTO stations VALUES(21, 'NEZ', NULL);
+INSERT INTO stations VALUES(22, 'PED', 'SW');
+INSERT INTO stations VALUES(23, 'PLA', 'SW');
+INSERT INTO stations VALUES(24, 'SAG', 'NE');
+INSERT INTO stations VALUES(25, 'SFE', NULL);
+INSERT INTO stations VALUES(26, 'SJA', 'NE');
+INSERT INTO stations VALUES(27, 'SUR', 'SW');
+INSERT INTO stations VALUES(28, 'TAC', 'NW');
+INSERT INTO stations VALUES(29, 'TAH', 'SE');
+INSERT INTO stations VALUES(30, 'TAX', 'SE');
+INSERT INTO stations VALUES(31, 'TLA', 'NW');
+INSERT INTO stations VALUES(32, 'TLI', 'NW');
+INSERT INTO stations VALUES(33, 'TPN', 'SW');
+INSERT INTO stations VALUES(34, 'UAX', NULL);
+INSERT INTO stations VALUES(35, 'UIZ', 'SE');
+INSERT INTO stations VALUES(36, 'VIF', 'NE');
+INSERT INTO stations VALUES(37, 'XAL', 'NE');
+COMMIT TRANSACTION;

@@ -1,0 +1,188 @@
+\chapter{Modelo Linear Dinâmico} \label{mld}
+%
+<<mld-setup>>=
+rnd_mld <- function(n, F, G, V, W, m0, C0) {
+    theta_t <- matrix(MASS::mvrnorm(1, m0, C0), length(m0), 1)
+    theta_t <- matrix(MASS::mvrnorm(1, G %*% theta_t, W), length(theta_t), 1)
+    Y_t <- rnorm(n, t(F) %*% theta_t, sqrt(V))
+
+    for (i in 2:n) {
+        theta_t <- matrix(MASS::mvrnorm(1, G %*% theta_t, W),
+                          length(theta_t), 1)
+        Y_t[i] <- rnorm(1, t(F) %*% theta_t, sqrt(V))
+    }
+    return(Y_t)
+}
+
+n <- 100
+F <- matrix(c(1, pi), 2, 1)
+G <- matrix(c(0.15, -0.08, -0.08, 0.15), 2, 2)
+V <- matrix(c(1), 1, 1)
+W <- matrix(c(1, 0.3, 0.3, 1), 2, 2)
+m0 <- matrix(c(0, 0), 2, 1)
+C0 <- matrix(c(10, 0, 0, 10), 2, 2)
+@
+%
+O uso de modelos lineares dinâmicos (MLD) cresceu bastante nas últimas décadas. Sua aplicabilidade tem se estendido nos campos da biologia, genética, geofísica, economia entre outros, \citep{petrone}. O desenvolvimento computacional das técnicas Bayesianas de estimação dos parâmetros é um dos fatores que impulsionou esse crescimento recente.
+
+Os MLD constituem uma família muito importante, pois, além de trazerem os modelos tradicionais de séries de tempo para a abordagem Bayesiana, expandem a gama de possibilidades de aplicações através da sua estrutura flexível e do próprio paradigma Bayesiano em si. São, ainda, um caso particular linear e Gaussiano dos modelos mais gerais de espaço-estado.
+
+\section{Definição do Modelo} \label{sec:def_mld}
+
+O modelo linear dinâmico mais geral é definido em relação a um vetor de observações $\vetor{Y}_t$. Porém, para efeitos de simplificação, será considerado o caso univariado $Y_t$ como em \cite{west}. Portanto, sejam, para os tempos $t = 1, \ldots, N$:
+%
+\begin{itemize}
+  \item $Y_t$ uma variável observada de interesse;
+  \item $\vetor{\theta}_t$ um vetor latente de variáveis que representam o sistema gerador de $Y_t$; e
+  \item $D_t$ toda informação disponível a respeito do sistema.
+\end{itemize}
+%
+Desse modo, para todo tempo $t$, o modelo linear dinâmico é descrito por:
+%
+\begin{align}
+	&\text{\textbf{Equação das Observações:}} & Y_t &= \vetor{F}'_t\vetor{\theta}_t + \nu_t, & \nu_t &\sim \dnormal{0}{V_t}{}, \label{mld:eq_obs}\\
+	&\text{\textbf{Equação do Sistema:}} & \vetor{\theta}_t &= \vetor{G}_t\vetor{\theta}_{t - 1} + \vetor{\omega}_t, & \vetor{\omega}_t &\sim \dnormal{\vetor{0}}{\vetor{W}_t}{}. \label{mld:eq_sis}
+\end{align}
+
+A quádrupla $\{\vetor{F}_t, \vetor{G}_t, V_t, \vetor{W}_t\}$ é composta pelas matrizes que caracterizam o modelo. $\vetor{F}_t$ é a matriz de \textit{design}, ou o vetor de regressão, no caso univariado. $\vetor{G}_t$ é a matriz de evolução do sistema e através dela é possível a especificação de alguns efeitos nos estados latentes, tais como nível, tendência e sazonalidade. $V_t$ é a variância observacional e $\vetor{W}_t$ é a matriz de variância da evolução do sistema. Quando esses elementos são invariantes no tempo, o modelo $\{\vetor{F}, \vetor{G}, V, \vetor{W}\}$ é chamado de constante, e engloba, essencialmente, todos os modelos lineares tradicionais de séries temporais.
+
+Os termos $\nu_t$ e $\vetor{\omega}_t$ são os erros associados às equações \eqref{mld:eq_obs} e \eqref{mld:eq_sis}. São denominados erro observacional e erro do sistema, respectivamente. Por definição, eles são independentes, no tempo e entre si, e assumem distribuição normal com média zero. Modelos ainda mais gerais podem ser definidos com $\nu_t$ e $\vetor{\omega}_t$ autocorrelacionados e correlacionados entre si. Entretanto, \cite{west} destaca que tais modelos sempre podem ser reescritos em termos mais simples, satisfazendo as condições de independência.
+
+A informação inicial sobre $\vetor{\theta}_t$ é representada por:
+%
+\begin{equation}
+	\text{\textbf{Informação Inicial:}} \qquad \pxt{\vetor{\theta}_0 | D_0} \sim \dnormal{\vetor{m}_0}{\vetor{C}_0}{}, \label{mld:eq_priori}\\
+\end{equation}
+%
+em que $\vetor{m}_0$ e $\vetor{C}_0$ são o vetor de médias e a matriz de variâncias e covariâncias da distribuição proposta, respectivamente.
+
+A Figura \ref{mld:fig_ex} ilustra um exemplo de \Sexpr{n} observações simuladas a partir de um modelo linear dinâmico constante definido pela quádrupla:
+%
+\begin{equation}
+  \{\vetor{F}, \vetor{G}, V, \vetor{W}\} = \left\{\begin{bmatrix}1 \\ \pi\end{bmatrix} , \begin{bmatrix}0,15 & -0,08 \\ -0,08 & 0,15 \end{bmatrix}, 1, \begin{bmatrix}1 & 0,3 \\ 0,3 & 1\end{bmatrix}\right\}. \label{mld:matrizes_exemplo}
+\end{equation}
+%
+A série partiu da distribuição inicial:
+%
+\begin{equation}
+	\pxt{\vetor{\theta}_0 | D_0} \sim \dnormalxt{\begin{bmatrix}0 \\ 0\end{bmatrix}}{\begin{bmatrix}10 & 0 \\ 0 & 10\end{bmatrix}}{}. \label{mld:priori_exemplo}\\
+\end{equation}
+%
+\begin{figure}[ht]
+\centering
+\begin{minipage}{0.8\linewidth}
+<<ex-mld, include = TRUE, eval = TRUE, echo = FALSE, opts.label = "regular_fig">>=
+tibble(t = 1:n, y_t = rnd_mld(n, F, G, V, W, m0, C0)) %>%
+    ggplot(mapping = aes(x = t, y = y_t)) +
+    geom_line(size = 0.5) +
+    geom_point(size = 1.5) +
+    labs(x = "$t$", y = "$y_t$")
+@
+\caption{Exemplo simulado de \Sexpr{n} observações geradas a partir de um modelo polinomial de primeira ordem.}
+\label{mld:fig_ex}
+\end{minipage}
+\end{figure}
+
+Os valores dos parâmetros nesse exemplo foram selecionados arbitrariamente, apenas tomando-se o cuidado para que não fossem muito grandes de modo a gerar observações numa escala elevada.
+
+Dentre as finalidades de um modelo de dados temporais está a previsão de observações futuras. Sob esse aspecto, o objetivo a ser alcançado agora é definir as distribuições de probabilidade da previsão de $Y$ no tempo $t$ dado todo o conhecimento anterior a esse tempo $\pxt{Y_t | D_{t - 1}}$ e da distribuição do vetor $\vetor{\theta}$ no tempo $t$ dado todo conhecimento disponível até então $\pxt{\vetor{\theta}_t | D_t}$. No entanto, tais desenvolvimentos demandam o uso da Inferência Bayesiana e, dessa forma, serão apresentadas algumas noções fundamentais sobre esse tipo de inferência a seguir.
+
+\section{Breve Resumo do Teorema de Bayes}
+
+Sejam dois eventos distintos $A$ e $B$. A probabilidade de ocorrência conjunta deles é dada pela regra do produto:
+%
+\begin{equation}
+  P(A \cap B) = P(A|B)P(B). \label{mld:regra_produto}
+\end{equation}
+%
+Naturalmente, a ordem dos eventos pode ser mudada, isto é, $P(B \cap A) = P(B|A)P(A)$. A partir dessa equação e \eqref{mld:regra_produto} surge a relação:
+%
+\begin{equation}
+  P(A|B) = \frac{P(B|A) P(A)}{P(B)}. \label{mld:teo_bayes}
+\end{equation}
+
+O resultado em \eqref{mld:teo_bayes} tem sua origem nas ideias do Reverendo Thomas Bayes no século XVIII, porém Pierre Simon de Laplace é o autor dessa equação conhecida nos dias atuais como Teorema de Bayes, \citep{sivia}. No contexto dos modelos lineares dinâmicos,
+%
+\begin{equation}
+f(\vetor{\theta}_t | y_t, D_{t-1}) = \frac{g(y_t | \vetor{\theta}_t, D_{t-1}) \pi(\vetor{\theta}_t | D_{t-1})}{h(y_t|D_{t-1})}.\label{mld:eq_bayes}
+\end{equation}
+
+O processo latente definido por $\vetor{\theta}_t$ é estimado através da realização $y_t$ de $Y$ e do conjunto de informações relevantes, $D_{t -1}$. Porém, a incerteza (ou certeza) inicial existente sobre $\vetor{\theta}_t$ deve ser expressa através de uma distribuição de probabilidade adequada \citep{jaynes}, no caso, $\pi(\vetor{\theta}_t|D_{t-1})$, que é denotada por distribuição \textit{a priori} de $\pxt{\vetor{\theta}_t|D_{t-1}}$.
+
+Conforme surjam novos dados, o conhecimento sobre o processo latente deve ser atualizado. Isso é feito pela função $g(y_t | \vetor{\theta}_t, D_{t-1})$, denominada de \textit{verossimilhança}.
+
+A função $h(y_t | D_{t-1})$ é chamada de distribuição preditiva \textit{a priori} de $y_t$. Ela é muito útil quando é desejável fazer inferências a respeito de uma observação ainda desconhecida, \citep{gelman}. No caso, quando o interesse é estimar o valor $y_t$ de $Y$, até então não observado.
+
+Por fim, $f(\vetor{\theta}_t | y_t, D_{t-1})$ é a distribuição resultante da composição das três anteriores. Ela permite fazer inferências sobre o processo latente e recebe o nome de distribuição \textit{a posteriori} de $\pxt{\vetor{\theta}_t | D_t}$, uma vez que o conhecimento de $y_t$ e $D_{t-1}$ dá origem a $D_t$.
+
+Recursivamente, utilizando a distribuição \textit{a posteriori} de $\pxt{\vetor{\theta}_t | D_t}$ obtem-se a distribuição \textit{a priori} de $\pxt{\vetor{\theta}_{t + 1} | D_t}$. Assim, o Teorema de Bayes flui naturalmente no contexto dos modelos lineares dinâmicos, como é visto através das equações de atualização a seguir.
+
+\section{Equações de Atualização} \label{eq_atualizacao}
+
+O modelo linear dinâmico oferece um conjunto de equações que são atualizadas ao longo do tempo, e que permitem estimar observações futuras. O raciocínio a seguir se baseia em \cite{west}. Apenas para simplificar a álgebra a ser apresentada, será considerado o modelo linear dinâmico constante.
+
+Seja, para algum $\vetor{m}_t$ e $\vetor{C}_t$, \textit{a posteriori} de $\vetor{\theta}_t$:
+%
+	\begin{equation}
+  	\pxt{\vetor{\theta}_t | D_t} \sim \dnormal{\vetor{m}_t}{\vetor{C}_t}{}. \label{mld:eq_posteriori_theta_t}
+  \end{equation}
+%
+As equações \eqref{mld:eq_sis} e \eqref{mld:eq_posteriori_theta_t} permitem calcular a distribuição \textit{a priori} de $\vetor{\theta}_{t+1}$ dada a informação em $t$, que é:
+%
+\begin{align}
+ \vetor{\theta}_{t + 1} &= \vetor{G}\vetor{\theta}_t + \vetor{\omega}_{t + 1}, \notag \\
+	\pxt{\vetor{\theta}_{t + 1} | D_t} &\sim \vetor{G}\dnormal{\vetor{m}_t}{\vetor{C}_t}{\pxt{\vetor{\theta}_t | D_t}} + \dnormal{\vetor{0}}{\vetor{W}}{\vetor{\omega}_{t + 1}}, \notag \\
+	\pxt{\vetor{\theta}_{t + 1} | D_t} &\sim \dnormal{\vetor{a}_{t + 1}}{\vetor{R}_{t+1}}{}, \label{mld:eq_priori_theta_t+1}
+\end{align}
+%
+em que $\vetor{a}_{t+1} = \vetor{G} \vetor{m}_t$ e $\vetor{R}_{t + 1} = \vetor{G}\vetor{C}_t\vetor{G}' + \vetor{W}$.
+
+A distribuição da previsão da observação de $Y_{t + 1}$ dada a informação em $t$, ou $(Y_{t+1} | D_t)$, pode ser calculada por meio das equações \eqref{mld:eq_obs} e \eqref{mld:eq_priori_theta_t+1}:
+%
+\begin{align}
+  Y_{t + 1} &= \vetor{F}'\vetor{\theta}_{t + 1} + \nu_{t + 1}, \notag \\
+	\pxt{Y_{t + 1} | D_t}	&\sim \vetor{F}'\dnormal{\vetor{a}_{t + 1}}{\vetor{R}_{t + 1}}{\pxt{\vetor{\theta}_{t + 1} | D_t}} + \dnormal{0}{V}{\nu_{t + 1}}, \notag \\
+	\pxt{Y_{t + 1} | D_t} &\sim \dnormal{f_{t + 1}}{Q_{t + 1}}{}, \label{mld:eq_forecast_1}
+\end{align}
+%
+em que $f_{t + 1} = \vetor{F}'\vetor{a}_{t + 1}$ e $Q_{t + 1} = \vetor{F}'\vetor{R}_{t + 1}\vetor{F} + V$.
+
+A distribuição \textit{a posteriori} de $\vetor{\theta}_{t + 1}$ dada a informação em $t + 1$, que será \textit{a priori} na próxima iteração, é obtida via o Teorema de Bayes, onde:
+%
+\begin{equation}
+  p(\vetor{\theta}_{t + 1} | D_{t + 1}) \propto p(Y_{t+1}|\vetor{\theta}_{t+1}, D_t) p(\vetor{\theta}_{t+1} | D_t) \label{mld:bayesdenovo}
+\end{equation}
+%
+e obtem-se:
+%
+\begin{equation}
+  \pxt{\vetor{\theta}_{t + 1} | D_{t + 1}} \sim \dnormal{\vetor{m}_{t + 1}}{\vetor{C}_{t + 1}}{}, \label{mld:eq_posteriori_theta_t+1}
+\end{equation}
+%
+onde, $\vetor{m}_{t + 1} = \vetor{a}_{t + 1} + \vetor{A}_{t + 1} e_{t + 1}$ e $\vetor{C}_{t + 1} = \vetor{R}_{t + 1} - \vetor{A}_{t + 1} Q_{t + 1} \vetor{A}'_{t + 1}$, com $\vetor{A}_{t + 1} = \vetor{R}_{t + 1}\vetor{F}Q^{-1}_{t + 1}$ e $e_{t + 1} = Y_{t + 1} - f_{t + 1}$.
+
+\section{Previsões}
+
+A previsão para um passo a frente é dada pela distribuição \eqref{mld:eq_forecast_1}, descrita anteriormente. Para definir a predição $k$ passos a frente é necessário, antes, encontrar a distribuição de $(\vetor{\theta}_{t + k} | D_t)$. Isso é feito por intermédio da distribuição \textit{a priori} \eqref{mld:eq_priori_theta_t+1}, aplicada na equação do sistema \eqref{mld:eq_sis}, sucessivamente. Assim, dado $D_t$ que é ainda a última informação disponível sobre o sistema, e para $k = 2$:
+%
+\begin{align}
+  \vetor{\theta}_{t + 2} &= \vetor{G}\vetor{\theta}_{t + 1} + \vetor{\omega}_{t + 2}, \notag \\
+  \pxt{\vetor{\theta}_{t + 2} | D_t}	&\sim \vetor{G}\dnormal{\vetor{a}_{t + 1}}{\vetor{R}_{t + 1}}{\pxt{\vetor{\theta}_{t + 1} | D_t}} + \dnormal{0}{\vetor{W}}{\vetor{\omega}_{t + 2}}, \notag \\
+  \pxt{\vetor{\theta}_{t + 2} | D_t} &\sim \dnormal{\vetor{a}_{t + 2}}{\vetor{R}_{t + 2}}{}, \label{mld:eq_priori_theta+2}
+\end{align}
+%
+em que $\vetor{a}_{t+2} = \vetor{G}\vetor{a}_{t + 1}$ e $\vetor{R}_{t + 2} = \vetor{G}\vetor{R}_{t + 1}\vetor{G}' + \vetor{W}$.
+
+Para um valor de $k \geq 2$, \cite{pole} mostra que:
+%
+\begin{equation}
+ \pxt{\vetor{\theta}_{t + k} | D_t} \sim \dnormal{\vetor{a}_{t + k}}{\vetor{R}_{t + k}}{}, \label{mld:eq_priori_theta+k}
+\end{equation}
+%
+\noindent onde $\vetor{a}_{t+k} = \vetor{G}^{k - 1}\vetor{a}_{t + 1}$ e $\vetor{R}_{t + k} = \vetor{G}^{k - 1}\vetor{R}_{t + 1}\pxt{\vetor{G}^{k - 1}}' + \soma{j = 2}{k}\vetor{G}^{k - j}\vetor{W}\pxt{\vetor{G}^{k - j}}'$. E, com isso, a distribuição da \textit{k-}ésima predição dada a informação $D_t$ será:
+%
+\begin{equation}
+ \pxt{Y_{t + k} | D_t} \sim \dnormal{f_{t + k}}{Q_{t + k}}{}, \label{mld:eq_forecast_k}
+\end{equation}
+%
+em que $f_{t+k} = \vetor{F}'\vetor{a}_{t + k}$ e $Q_{t + k} = \vetor{F}'\vetor{R}_{t + k}\vetor{F}' + V$.

@@ -1,0 +1,14 @@
+\chapter*{Conclusão}
+\addcontentsline{toc}{chapter}{Conclusão}
+
+Este trabalho versa sobre o estudo de procedimentos Bayesianos de estimação para modelos de volatilidade estocástica (MVE). Nesta dissertação constatou-se as dificuldades e limitações de algumas metodologias propostas, recentemente, para os MVE \citep{kastner} bem como as deficiências de alguns \textit{softwares} existentes para lidar com o problema sob o paradigma Bayesiano, como o JAGS. Na tentativa de propor alternativas eficientes na estimação dos estados latentes do MVE, neste trabalho adaptou-se a metodologia descrita em \cite{mccormick}. Posteriormente, combinou-se a metodologia desenvolvida neste trabalho com os procedimentos propostos por \cite{kastner}, para possibilitar a estimação de todos os parâmetros do MVE.
+
+É bem verdade que a metodologia proposta, baseada na junção de \cite{kastner} e \cite{mccormick}, não resolveu o problema de forma definitiva. Porém, ela pode ser considerada um marco inicial para trabalhos futuros. É necessário avaliar, com detalhes, a forma como $\phi$ é estimado, uma vez que, como apontado anteriormente a estimação desse parâmetro parece o problema mais desafiador de um MVE. É fundamental que se faça estudos mais aprofundados da associação entre o parâmetro de persistência $\phi$ e o fator de desconto $\lambda_t$, além de investigar se a distribuição normal truncada (geradora de candidatos \textit{a posteriori} de $\phi$ no algoritmo de Metropolis-Hastings) é adequada nesse contexto.
+
+Os demais parâmetros, $\mu$ e $\sigma_\eta^2$, não apresentaram grandes problemas, especialmente $\mu$, pois como pôde ser observado, os seus valores estimados foram bastante satisfatórios nos estudos com os dados simulados.
+
+Destaca-se, também, o desafio que é trabalhar com o modelo de volatilidade estocástica. Trata-se de um modelo computacionalmente caro, o que representa uma grande limitação no desenvolvimento de novas metodologias, e implementação computacional de novos algoritmos numa linguagem de alto nível, como o R, por exemplo.
+
+Como citado anteriormente, há diversas propostas na literatura sobre a estimação dos parâmetros dos MVE, tanto do ponto de vista clássico quanto do Bayesiano. No entanto, até o momento, nenhuma destas propostas possibilitou a estimação satisfatória de todos os parâmetros do modelo (em especial do parâmetro de persistência $\phi$), indicando que ainda há um campo vasto para pesquisas nesta área.
+
+Conclui-se este trabalho com a expectativa de termos contribuído com algumas informações adicionais que podem ser úteis no desenvolvimento dos modelos de volatilidade estocástica.

@@ -1,0 +1,452 @@
+\chapter{Proposta de Estimação dos Parâmetros do MVE} \label{estimacao}
+
+Existe uma grande desvantagem do modelo de volatilidade estocástica em relação aos modelos ARCH e GARCH em termos de aplicações, como cita \cite{bos}. Isso ocorre pois os modelos ARCH e GARCH possuem muitas variações, porém, basicamente apenas uma maneira de se estimar os parâmetros, que está presente em grande parte dos \textit{softwares} estatísticos. Já o modelo de volatilidade estocástica apresenta poucas variações, porém diversos autores sugerem maneiras distintas de se estimar os parâmetros. No entanto, quase nenhuma destas está disponível facilmente através de algum pacote computacional. A Tabela \ref{est:tab_bos} foi extraída de \cite{bos} e apresenta, de forma sintetizada, as principais referências sobre os diversos métodos de estimação publicados.
+%
+\begin{table}[ht]
+  \centering
+  \caption{Métodos de estimação dos parâmetros do modelo de volatilidade estocástica e principais referências, \citep{bos}.}
+  \scalebox{1}{\begin{tabular}{lll}
+    \hline
+    \multicolumn{1}{c}{Método} & \multicolumn{1}{c}{Referência} & \multicolumn{1}{c}{Paradigma} \\
+    \hline
+    Quasi-Maximum Likelihood (QML) & \cite{harvey} & Clássico \\
+    Gaussian Mixture Sampling (GMS) & \cite{kim} & Bayesiano \\
+    Simulated Method of Moments (SMM) & \cite{gallant} & Clássico \\
+    Importance Sampling (IS) & \cite{durbin} & Clássico \\
+    Efficient Importance Sampling (EIS) & \cite{richard} & Clássico \\
+    Improved Importance Sampling (IIS) & \cite{nguyen} & Clássico \\
+    Single Site Sampler (SSS) & \cite{carter} & Bayesiano \\
+    MultiMove Sampler (MMS) & \cite{shephard97} & Bayesiano \\
+    \hline
+  \end{tabular}}
+  \label{est:tab_bos}
+\end{table}
+
+Como pode ser percebido, a estimação dos parâmetros do modelo de volatilidade estocástica é um problema atacado de diversas maneiras distintas. O foco desta dissertação é apresentar um método Bayesiano, alternativo àqueles da Tabela \ref{est:tab_bos}, que combina as técnicas propostas em \cite{kastner} e \cite{mccormick}. O primeiro artigo sugere uma metodologia inovadora que envolve, basicamente, a alternância da especificação do modelo no processo de estimação dos parâmetros. O segundo artigo, por sua vez, inspirou uma proposta para modelar a variável latente, $h_t$, do modelo de volatilidade estocástica. Ambos os processos serão detalhados nas próximas seções.
+
+\section{Definição do Modelo Bayesiano}
+
+A estimação Bayesiana dos parâmetros do modelo canônico (ou centralizado) de volatilidade estocástica em \eqref{mvs:mvs} consiste em determinar a distribuição \textit{a posteriori} conjunta de:
+%
+\begin{equation}
+  \vetor{\psi} = (\mu, \phi, \sigma_\eta^2). \label{est:psi}
+\end{equation}
+%
+Apesar de $\vetor{\psi}$ ser um vetor com três elementos, é tecnicamente conveniente supor que as componentes de $\vetor{\psi}$ sejam independentes \textit{a priori}. Portanto, foram tomadas três distribuições, uma para cada elemento de $\vetor{\psi}$, independentes entre si:
+%
+\begin{equation}
+  p_{\vetor{\psi}}(\vetor{\psi}) = p_\mu(\mu)p_\phi(\phi)p_{\sigma_\eta^2}(\sigma_\eta^2). \label{est:posteriori}
+\end{equation}
+
+Como o paradigma Bayesiano sugere, deve-se definir as distribuições \textit{a priori} dos parâmetros, que, atualizadas pela função de verossimilhança, irão gerar a distribuição \textit{a posteriori} de $(\vetor{\psi} | D)$, que é o ponto principal no processo de inferência estatística. Neste trabalho foram utilizadas as mesmas distribuições \textit{a priori} descritas em \cite{kastner} e \cite{kim} para os parâmetros em $\vetor{\psi}$.
+
+O nível $\mu$ da volatilidade tem seu suporte em $\mathbb{R}$, e será atribuída uma distribuição \textit{a priori}, $\pi(\mu)$, com densidade Gaussiana para esse parâmetro:
+%
+\begin{equation}
+  \mu \sim \dnormal{a_\mu}{B_\mu}{}. \label{mvs:priori_mu}
+\end{equation}
+
+O parâmetro $\phi$ determina a persistência da volatilidade, e $\abs{\phi} < 1$. A distribuição beta é bastante flexível, sendo, dessa forma, a escolha mais comum quando se deseja modelar alguma variável contínua cujo valor esteja descrito num intervalo $(a, b)$. Com a finalidade de aproveitar essa vantagem da distribuição beta, seja uma nova variável $\phi_0$ com distribuição \textit{a priori} é $\dbeta{a_\phi}{b_\phi}{}$. A persistência, então, é descrita por $\phi = 2\phi_0 - 1$ e sua distribuição \textit{a priori} será:
+%
+\begin{equation}
+  \pi(\phi) = \frac{\Gamma(a_\phi + b_\phi)}{2\Gamma(a_\phi)\Gamma(b_\phi)} \pxt{\frac{1 + \phi}{2}}^{a_\phi - 1} \pxt{\frac{1 - \phi}{2}}^{b_\phi - 1}. \label{mvs:priori_phi}
+\end{equation}
+
+O terceiro e último parâmetro do modelo é $\sigma_\eta^2$, a variância da volatilidade, e seus possíveis valores estão em $\mathbb{R}^+$. Sua distribuição \textit{a priori} será:
+%
+\begin{equation}
+  \sigma_\eta^2 \sim \dgammaxt{\frac{1}{2}}{\frac{1}{2B_\sigma}}{}. \label{mvs:priori_sigma2}
+\end{equation}
+
+\section{Estimando $\mu$, $\phi$ e $\sigma_\eta^2$}
+
+Dada a complexidade do problema, as formas fechadas das distribuições condicionais completas \textit{a posteriori} dos parâmetros em $\vetor{\psi}$ serão estimadas por meio de algoritmos via métodos de Monte Carlo em cadeias de Markov (do inglês, \textit{Markov chain Monte Carlo}, MCMC).
+
+\cite{kastner} propõe uma estratégia que é chamada de \textit{Ancillarity-Sufficiency Interweaving Strategy} (ASIS). Em tradução livre para o português seria \textit{Estratégia de Entrelaçamento Ancilar-Suficiente}. Apesar de não convencional, a ideia é bastante simples. Dados os valores da série da variável latente, $h_t$, os parâmetros $\mu$, $\phi$ e $\sigma_\eta^2$ devem ser estimados a partir do modelo canônico (também conhecido como centralizado). Então, a série de $h_t$ deve ser transformada para a parametrização não centralizada e os valores dos parâmetros devem ser novamente amostrados via MCMC. Os passos do algoritmo são resumidos da seguinte forma:
+
+\newpage
+\textbf{Algorítimo Proposto por \cite{kastner}.}
+\vspace{-0.8cm}
+\begin{framed}
+\begin{enumerate}
+  \item Iniciar os valores de $\mu$, $\phi$ e $\sigma_\eta^2$;
+  \item Estimar a série de $h_t$ (modelo canônico);
+  \item A partir dos valores de $h_t$, estimar os valores de $\mu$, $\phi$ e $\sigma_\eta^2$;
+  \item Transformar a série de $h_t$ para o modelo não centralizado, $h_t^*$;
+  \item A partir dos valores de $h_t^*$, estimar novamente os valores de $\mu$, $\phi$ e $\sigma_\eta^2$.
+\end{enumerate}
+\end{framed}
+
+O porquê dessa alternância de especificações do modelo vem do fato que a variável latente $h_t$, no modelo centralizado, forma uma estatística suficiente para $\mu$ e $\sigma_\eta^2$, ao passo que $h_t$, transformada para o modelo não centralizado, forma uma estatística ancilar para esses parâmetros. Então, alternar entre essas especificações do modelo aumenta a eficiência do amostrador via MCMC. \cite{kastner} sugere essa melhora no processo do estimação com base em \cite{yu-meng}, que apresenta a ASIS, relacionando-a com o teorema de Basu \citep{basu}, como uma forma de aprimorar a eficiência de algoritmos baseados em MCMC.
+
+No caso do modelo de volatilidade estocástica, \cite{kastner} mostra que o modelo centralizado, sozinho, apresenta melhores resultados quando os valores da persistência, $\phi$, e da variância da volatilidade, $\sigma_\eta^2$, são altos. Enquanto que o modelo não centralizado, também sozinho, apresenta melhor performance quando o valor de $\phi$ é menor. Então, a estratégia, na média, apresenta bons resultados num maior espectro de possíveis valores dos parâmetros.
+
+A ideia mais intuitiva é ``descentralizar'' o modelo canônico \eqref{mvs:mvs}, no passo 4 do algoritmo, através da transformação \eqref{mvs:h_estrela}:
+%
+\begin{equation}
+  h_t^* = h_t - \mu, \label{est:h_estrela}
+\end{equation}
+%
+o que leva ao modelo parcialmente não centralizado \eqref{mvs:mvs_ncp}. Porém \cite{kim} e \cite{prado} advertem que esse modelo é ineficiente para se estimar $\mu$. Desse modo, o modelo completamente não centralizado \eqref{mvs:mvs_nc} é proposto por \cite{kastner}, para completar o processo de estimação. Neste modelo,
+%
+\begin{equation}
+  \tilde{h}_t = \frac{h_t - \mu}{\sigma_\eta}. \label{est:h_tilde}
+\end{equation}
+
+Os passos detalhados do algoritmo de estimação, conforme \cite{kastner}, são descritos nas subseções que seguem.
+
+\subsection{Amostrando $\sigma_\eta^2$} \label{mvs:f1}
+
+A variância da volatilidade, $\sigma_\eta^2$, é estimada com base no algoritmo de Metropolis-Hastings (\cite{metropolis}; \cite{hastings}). Esse algoritmo parte de uma função geradora de candidatos a valores do parâmetro em questão. Então, gerado um provável valor, ele é aceito como observação \textit{a posteriori} com probabilidade dada por $\min(1, R)$. Caso o valor proposto seja rejeitado, o valor da iteração anterior é repetido na iteração atual.
+
+A partir do modelo canônico \eqref{mvs:mvs} e, consequentemente, dos valores de $h_t$, a distribuição geradora de candidatos de $\sigma_\eta^2$ foi construída considerando uma distribuição \textit{a priori} auxiliar conjulgada $p(\sigma_\eta^2) \propto \sigma_\eta^{-1}$, de modo que a distribuição condicional completa de $\sigma_\eta^2$ tenha uma distribuição geradora de candidatos tal que:
+%
+\begin{equation}
+  \sigma_\eta^2 | h_{1:N}, \mu, \phi \sim \dinvgamma{c_N}{C_N}{}. \label{est_sigma_c}
+\end{equation}
+%
+Assim, a distribuição geradora de candidatos é Gama-Inversa com parâmetros $c_N$ e $C_N$, em que $N$ é a quantidade de observações,
+\begin{equation}
+  c_N = \frac{N}{2}, \label{est:sigma_cT}
+\end{equation}
+%
+e
+%
+\begin{equation}
+  C_N = \frac{1}{2} \pxt{\soma{t = 1}{N} \pxt{\pxt{h_t - \mu} - \phi\pxt{h_{t-1} - \mu}}^2 + \pxt{h_0 - \mu}^2\pxt{1 - \phi^2}}. \label{est:sigma_CT}
+\end{equation}
+
+O valor gerado é aceito com probabilidade $\min(1, R)$, onde:
+%
+\begin{equation}
+  R = \text{exp}\left\{\frac{\sigma_{\eta;*}^2 - \sigma_{\eta;0}^2}{2B_\sigma}\right\}, \label{est:R_sigma2_c}
+\end{equation}
+%
+$\sigma_{\eta;0}^2$ é o candidato gerado, $\sigma_{\eta;*}^2$ é o valor gerado na iteração anterior e $B_\sigma$ é o hiperparâmetro da distribuição \textit{a priori} de $\sigma_\eta^2$ em \eqref{mvs:priori_sigma2}.
+
+Se o valor $\sigma_{\eta;0}^2$ não for aceito, o valor $\sigma_{\eta;*}^2$ é repetido.
+
+\subsection{Amostrando $\phi$} \label{mvs:f2}
+
+De maneira semelhante, a persistência, $\phi$, do modelo de volatilidade estocástica é estimada, sob o modelo canônico, através do algoritmo de Metropolis-Hastings utilizado na estimação de $\sigma_\eta^2$.
+
+Utilizando uma distribuição \textit{a priori} hierárquica para $\phi$ tal que, \textit{a priori} $(\phi | \sigma_\eta^2) \sim \dnormal{0}{\sigma_\eta^2B_0^{22}}{}$ com $B_0^{22}$ sendo uma constante a ser definida, \cite{kastner} controi a seguinte distribuição geradora de candidatos para $\phi$:
+%
+\begin{equation}
+  \phi | h_{1:N}, \gamma, \sigma_\eta^2 \sim \dnormalxt{\frac{\soma{t = 1}{N}h_{t-1}h_t - \gamma \soma{t = 0}{N - 1} h_t}{\soma{t = 0}{N-1}h_t^2 + \frac{1}{B_0^{22}}}}{\frac{\sigma_\eta^2}{\soma{t = 0}{N-1}h_t^2 + \frac{1}{B_0^{22}}}}{} I_{(-1, 1)}(\phi), \label{est:phi_c}
+\end{equation}
+%
+onde, $N$ é a quantidade de observações, $B_0^{22}$ é a constante definida anteriormente, e $\gamma = (1 - \phi) \mu$ é uma transformação a ser detalhada na próxima subseção. A densidade de probabilidade proposta em \eqref{est:phi_c} é multiplicada pela função indicadora, $I_{(-1, 1)}(\phi)$, pois $\abs{\phi} < 1$. Dessa maneira, a distribuição Gaussiana é \textit{truncada} nos possíveis valores do parâmetro. 
+
+O candidato a valor do parâmetro gerado é aceito como observação \textit{a posteriori} de $\phi$ com probabilidade $\min(1, R)$, onde:
+%
+\begin{equation}
+  R = \frac{p(h_o | \mu, \phi_o, \sigma_\eta^2) \pi(\phi_0)}{p_{\text{aux}}(\phi_0 | \sigma_\eta^2)} \times \frac{p_{\text{aux}}(\phi_* | \sigma_\eta^2)}{p(h_o | \mu, \phi_*, \sigma_\eta^2) \pi(\phi_*)},\label{est:R_phi_c}
+\end{equation}
+%
+$\phi_0$ é o candidato gerado, $\phi_*$ é a observação \textit{a posteriori} do parâmetro $\phi$ amostrada na iteração anterior, $p(h_0| \ldots)$ é a distribuição \textit{a priori} de $h_0$ sob o modelo canônico dada em \eqref{mvs:mvs}, $\pi(\phi)$ é a distribuição \textit{a priori} de $\phi$ definida em \eqref{mvs:priori_phi} e $p_{\text{aux}}(\phi | \sigma_\eta^2)$ é a distribuição hierárquica \textit{a priori} definida em \cite{kastner}:
+%
+\begin{equation}
+  p_{\text{aux}}(\phi | \sigma_\eta^2) \sim \dnormal{0}{\sigma_\eta^2 B_0^{22}}{}. \label{est:aux_phi}
+\end{equation}
+%
+Assim como \eqref{est:phi_c}, a distribuição anterior depende da constante $B_0^{22}$ a ser definida.
+
+Se o candidato $\phi_0$ não for aceito, o valor de $\phi_*$ é repetido como valor da distribuição \textit{a posteriori} de $\phi$.
+
+\subsection{Amostrando $\mu$} \label{mvs:f3}
+
+A estimação de $\mu$ descrita em \cite{kastner} é feita por intermédio da transformação:
+%
+\begin{equation}
+  \gamma = (1 - \phi) \mu. \label{est:gamma}
+\end{equation}
+%
+A nova variável $\gamma$, que aparece pela primeira vez na distribuição geradora de candidatos de $\phi$ na subseção anterior, é proposta por \cite{kastner} como uma via indireta de se estimar $\mu$. A distribuição \textit{a priori} de $(\gamma | \phi)$ é dada por:
+%
+\begin{equation}
+  (\gamma | \phi) \sim \dnormal{(1 - \phi)a_\mu}{(1 - \phi)^2B_\mu}{}. \label{est:priori_gamma}
+\end{equation}
+
+O algoritmo de Metropolis-Hastings também é utilizado como nas etapas anteriores. Utilizando uma distribuição \textit{a priori} hierárquica para $\gamma$ tal que, $(\gamma | \sigma_\eta^2) \sim \dnormal{0}{\sigma_\eta^2B_0^{11}}{}$, sendo $B_0^{11}$ uma constante a ser definida, é possível construir a distribuição geradora de candidatos de $\gamma$ dada por:
+%
+\begin{equation}
+  \gamma | h_{1:N}, \phi, \sigma_\eta^2 \sim \dnormalxt{\frac{\soma{t = 1}{N}h_t - \phi \soma{t = 0}{N - 1}h_t}{N + \frac{1}{B_0^{11}}}}{\frac{\sigma_\eta^2}{N + \frac{1}{B_0^{11}}}}{}, \label{est:gamma_c}
+\end{equation}
+%
+onde $N$ é o número de observações.
+
+O valor gerado então é aceito com probabilidade $\min(1, R)$, onde:
+%
+\begin{equation}
+  R = \frac{p(h_o | \gamma_0, \phi, \sigma_\eta^2) \pi(\gamma_0 | \phi)}{p_{\text{aux}}(\gamma_0 | \sigma_\eta^2)} \times \frac{p_{\text{aux}}(\gamma_* | \sigma_\eta^2)}{p(h_o | \gamma_*, \phi, \sigma_\eta^2) \pi(\gamma_* | \phi)},\label{est:R_gamma_c}
+\end{equation}
+%
+$\gamma_0$ é o candidato gerado, $\gamma_*$ é o valor gerado a partir da transformação \eqref{est:gamma} de $\mu$ da iteração anterior e $p(h_0| \ldots)$ é a distribuição \textit{a priori} de $h_0$ sob o modelo canônico dada em \eqref{mvs:mvs} e modificada para $\gamma$:
+%
+\begin{equation}
+  h_0 \sim \dnormalxt{\frac{\gamma}{1 - \phi}}{\frac{\sigma_\eta^2}{1 - \phi^2}}{}.
+\end{equation}
+%
+$\pi(\gamma | \phi)$ é a distribuição \textit{a priori} de $\gamma$ definida em \eqref{est:priori_gamma} e $p_{\text{aux}}(\gamma | \sigma_\eta^2)$ é a distribuição \textit{a priori} hierárquica definida em \cite{kastner}:
+%
+\begin{equation}
+  p_{\text{aux}}(\gamma | \sigma_\eta^2) \sim \dnormal{0}{\sigma_\eta^2 B_0^{11}}{}. \label{est:aux_phi}
+\end{equation}
+
+Se o valor $\gamma_0$ for rejeitado, o valor de $\mu$ resultante da iteração anterior é repetido. A partir do valor amostral de $\gamma$, a observação \textit{a posteriori} de $\mu$ é definida resolvendo \eqref{est:gamma}:
+%
+\begin{equation}
+  \mu = \frac{\gamma}{1 - \phi}. \label{est:mu_gamma}
+\end{equation}
+
+\subsection{Reamostrando $\sigma_\eta^2$} \label{mvs:f4}
+
+Após a seleção das amostras como descrito nas subseções \ref{mvs:f1} a \ref{mvs:f3}, os parâmetros $\mu$, $\phi$ e $\sigma_\eta^2$ foram estimados sob o modelo centralizado, ou canônico. Na sequência, os valores atuais da variável $h_t$ devem ser transformados para o modelo não centralizado \eqref{mvs:mvs_nc}, para que façam-se novas amostragens dos parâmetros. Isso é feito por intermédio da transformação:
+%
+\begin{equation}
+  \tilde{h}_t = \frac{h_t - \mu}{\sigma_\eta}. \label{est:h_tilde}
+\end{equation}
+
+O novo valor de $\sigma_\eta^2$ é gerado diretamente da distribuição condicional completa do parâmetro sob o modelo não centralizado:
+%
+\begin{equation}
+  \sigma_\eta | \tilde{y}_{1:N}, \tilde{h}_{1:N}, \mu \sim \dnormalxt{a_{N,\sigma_\eta}}{B_{N, \sigma_\eta}}{}, \label{est:sigma_nc_dist}
+\end{equation}
+%
+onde,
+%
+\begin{equation}
+  a_{N,\sigma_\eta} = B_{N,\sigma_\eta} \soma{t = 1}{N} \frac{\tilde{h}_t \pxt{\tilde{y}_t - m_r - \mu}}{s_r^2},
+\end{equation}
+%
+e
+%
+\begin{equation}
+  B_{N,\sigma_\eta} = \frac{1}{\soma{t = 1}{N} \frac{\tilde{h}_t^2}{s_r^2} + \frac{1}{B_\sigma}}.
+\end{equation}
+%
+Os termos em $\tilde{y}_t$ são os valores observados transformados de acordo com a proposta de linearização \eqref{mvs:eq_obs_reescrita_ingenua} no modelo de espaço-estado:
+%
+\begin{equation}
+  \tilde{y}_t = \ln y_t^2.
+\end{equation}
+%
+Os valores $m_r$ e $s_r^2$ correspondem aos parâmetros da mistura de 10 normais sugeridas (Tabela \ref{mvs:tab_mistura}) para modelar o erro que surge na linearização do modelo de volatilidade estocástica. $B_\sigma$ é o hiperparâmetro da distribuição \textit{a priori} de $\sigma_\eta^2$ em \eqref{mvs:priori_sigma2}.
+
+\subsection{Reamostrando $\mu$} \label{mvs:f5}
+
+De maneira análoga, o valor de $\mu$ é reamostrado diretamente através da distribuição condicional completa de $\mu$:
+%
+\begin{equation}
+  \mu | \tilde{y}_{1:N}, \tilde{h}_{1:N}, \sigma_\eta \sim \dnormalxt{a_{N,\mu}}{B_{N, \mu}}{}, \label{est:mu_nc_dist}
+\end{equation}
+%
+onde,
+%
+\begin{equation}
+  a_{N,\mu} = B_{N,\mu} \soma{t = 1}{N} \frac{\tilde{y}_t - m_r - \sigma_\eta\tilde{h}_t}{s_r^2} + \frac{a_\mu}{B_\mu},
+\end{equation}
+%
+e
+%
+\begin{equation}
+  B_{N,\mu} = \frac{1}{\soma{t = 1}{N} \frac{1}{s_r^2} + \frac{1}{B_\mu}}.
+\end{equation}
+%
+Novamente, $\tilde{y}_t$ representa os valores observados transformados conforme a proposta de linearização do problema em \eqref{mvs:eq_obs_reescrita_ingenua}. Os termos $m_r$ e $s_r^2$ são os parâmetros da mistura de 10 normais que modela o erro referente à mesma transformação, e os valores $a_\mu$ e $B_\mu$ são os hiperparâmetros da distribuição \textit{a priori} de $\mu$ em \eqref{mvs:priori_mu}.
+
+O valor de $\phi$ não precisa ser reamostrado, pois esse parâmetro não é explicitamente envolvido na transformação \eqref{est:h_tilde} da variável latente. Como cita \cite{kastner}, apenas os valores de $\mu$ e $\sigma_\eta^2$ precisam ser reestimados segundo essa estratégia.
+
+\section{Estimando $h_{1:N}$}
+
+Na seção anterior apresentou-se a estratégia de estimação dos parâmetros do modelo de volatilidade estocástica, conforme a sugestão em \cite{kastner}. Desta feita, o procedimento consiste em alternar a parametrização do modelo ao longo das iterações, sendo conhecidos (ou estimados) os valores da série $h_t$. Os autores apresentam uma maneira de estimar a variável latente, $h_t$, através de uma distribuição normal $N$-variada (onde $N$ é a quantidade de observações) bastante específica. Além disso a implementação computacional do processo de estimação não é trivial. O objetivo aqui é sugerir uma outra maneira de se estimar $h_t$ em substituição àquela presente no artigo original.
+
+A proposta a ser apresentada nessa seção é inspirada em \cite{mccormick}. No trabalho citado, os autores utilizam aproximações Gaussianas para estimar os estados latentes de um modelo de regressão dinâmica de Bernoulli. A grande vantagem dessa abordagem é que se trata de um processo de estimação mais simples do que o proposto em \cite{kastner}. A adaptação da técnica de \cite{mccormick} ao modelo de volatilidade estocástica é desenvolvida a seguir. Antes, porém, o método de \cite{mccormick} será sumarizado de uma forma geral.
+
+\subsection{O Método de \cite{mccormick}}
+
+Nesta seção será descrito o método proposto por \cite{mccormick}, originalmente para trata de regressão dinâmica para dados binários, de uma forma mais geral, a ser usada posteriormente no modelo de volatilidade estocástica.
+
+Seja $t = 1, \ldots, N$, os tempos discretos em que uma série temporal, $y_t$ é monitorada e o seguinte modelo dinâmico:
+%
+\begin{align}
+ &\text{\textbf{Equação das Observações:}} & y_t &\sim f(. | \mu_t), & \notag \\
+ &\text{\textbf{Função de Ligação:}} & \mu_t &= \eta{\vetor{\theta}_t} = \vetor{x}_t^T\vetor{\theta}_t, & \notag \\
+ &\text{\textbf{Equação do Sistema:}} & \vetor{\theta}_t &= \vetor{G}\vetor{\theta}_{t - 1} + \vetor{\omega}_t, & \label{mc:modelo}
+\end{align}
+%
+onde $\vetor{x}_t = (\vetor{x}_{1,t}, \ldots, \vetor{x}_{d,t})$ é um vetor de preditores, $\vetor{\theta}_t$ é um vetor $d$-dimensional de variáveis latentes, $\eta(\vetor{\theta}_t)$ é uma função de ligação, $\vetor{G}$ é uma matriz como definida na Seção \ref{sec:def_mld} e os $\vetor{\omega}_t$'s são vetores aleatórios independentes e identicamente distribuídos tais que $\vetor{\omega}_t \sim \dnormal{0}{\vetor{W}_t}{}$.
+
+Para os dados observados $D_{t-1} = (y_1, \ldots, y_{t-1})$ e considerando pontos de partida razoáveis, a estimação recursiva começa supondo que \citep{mccormick}:
+%
+\begin{equation}
+  (\vetor{\theta}_{t-1} | D_{t-1}) \sim \dnormal{\hat{\vetor{\theta}}_{t-1}}{\hat{\vetor{\Sigma}}_{t-1}}{}. \label{mc:inicio}
+\end{equation}
+
+O processo de estimação é, então, feito em dois passos: predição e atualização. Baseado em \eqref{mc:modelo} e \eqref{mc:inicio}, a \textit{equação de predição} é descrita por:
+%
+\begin{equation}
+  (\vetor{\theta}_t | D_{t-1}) \sim \dnormal{\vetor{G}\hat{\vetor{\theta}}_{t-1}}{\vetor{R}_t}{}, \label{mc:pred}
+\end{equation}
+%
+em que
+%
+\begin{equation}
+  \vetor{R}_t = \frac{\vetor{G}\hat{\vetor{\Sigma}}_{t-1}\vetor{G}^T}{\lambda_t}, \label{mc:R}
+\end{equation}
+%
+onde $\lambda_t$ é um \textit{fator de desconto}, com $0 < \lambda_t < 1$ especificado através da equação \eqref{mc:maximiza} e $\hat{\vetor{\Sigma}}_{t-1}$ é obtido pela equação \eqref{mc:matat}.
+
+Após o passo da predição, a \textit{atualização} é feita ao obter a distribuição \textit{a posteriori} de $(\vetor{\theta}_t | D_t)$, que é aproximada, usando-se \eqref{mc:pred} e o Teorema de Bayes, por:
+%
+\begin{equation}
+  p(\vetor{\theta}_t | D_t) \propto p(y_t | \vetor{\theta}_t) \dnormal{\vetor{G}\hat{\vetor{\theta}}_{t-1}}{\vetor{R}_t}{}. \label{mc:bayes}
+\end{equation}
+
+O lado direito de \eqref{mc:bayes} não possui forma fechada. Então, $\vetor{\theta}_t$ é estimado utilizando-se um procedimento de Newton-Raphson. Seja,
+%
+\begin{equation}
+  l(\vetor{\theta}_t) = \ln p(\vetor{\theta}_t | D_t) \approx \ln p(y_t | \vetor{\theta}_t) - \frac{1}{2} \left[\vetor{\theta}_t^T\vetor{R}_t^{-1} - 2\hat{\vetor{\theta}}_{t-1}^T \vetor{G}^T \vetor{R}_t^{-1}\vetor{\theta}_t\right], \label{mc:gigante}
+\end{equation}
+%
+e a estimativa de $\vetor{\theta}_t$ dada por:
+%
+\begin{equation}
+  \hat{\vetor{\theta}}_t = \hat{\vetor{\theta}}_{t-1} - \left[D^2 l(\hat{\vetor{\theta}}_{t-1})\right]^{-1} D l(\hat{\vetor{\theta}}_{t-1}), \label{mc:estimador}
+\end{equation}
+%
+onde $D l(\vetor{\theta}_t)$ e $D^2 l(\vetor{\theta}_t)$ são a primeira e a segunda derivadas de $l(\vetor{\theta}_t)$, respectivamente.
+
+Para atualizar a matriz de covariância $\vetor{\Sigma}_t$, utiliza-se:
+%
+\begin{equation}
+  \hat{\vetor{\Sigma}}_t = - \left[D^2 l(\hat{\vetor{\theta}}_{t-1})\right]^{-1}. \label{mc:matat}
+\end{equation}
+
+A distribuição preditiva $p(Y_t | D_{t-1})$ é obtida através de:
+%
+\begin{equation}
+  p(Y_t | D_{t-1}) = \int p(Y_t | \vetor{\theta}_t, D_{t-1}) p(\vetor{\theta}_t | D_{t-1}) d\vetor{\theta}_t. \label{mc:integralloca}
+\end{equation}
+%
+No entanto, a expressão em \eqref{mc:integralloca} não possui forma fechada, mas é possível calcular o seu valor por aproximações de Laplace \citep{tierney}:
+%
+\begin{equation}
+    f(y_t | D_{t-1}) \approx (2\pi)^\frac{d}{2} \left| \left(D^2l(\hat{\vetor{\theta}}_t)\right)^{-1}\right| p(y_t | \hat{\vetor{\theta}}_t) p(\hat{\vetor{\theta}}_t | D_{t-1}), \label{mc:trololo}
+\end{equation}
+%
+em que,
+%
+\begin{equation}
+  p(\hat{\vetor{\theta}}_t | D_{t-1}) \approx \dnormalxt{\vetor{G}\hat{\vetor{\theta}}_t}{\vetor{R}_t(\hat{\vetor{\theta}}_t)}{}, \label{mc:normaltrololo}
+\end{equation}
+%
+onde
+%
+\begin{equation}
+  \vetor{R}_t(\hat{\vetor{\theta}}_t) = \frac{\vetor{G} \left[ D^2l(\hat{\vetor{\theta}}_t)\right]^{-1}\vetor{G}^T}{\lambda_t}, \label{mc:rtrololo}
+\end{equation}
+%
+e $p(y_t | \hat{\vetor{\theta}}_t) = f(y_t | \eta(\hat{\vetor{\theta}}))$.
+
+Na estimação do fator de desconto, $\lambda_t$, é escolhido o valor de $\lambda_t$ que maximiza a expressão \eqref{mc:trololo}, isto é,
+%
+\begin{equation}
+  \lambda_t = \argmax_{\lambda_t} p(Y_t | D_{t-1}, \lambda_t). \label{mc:maximiza}
+\end{equation}
+
+Agora esta técnica é utilizada na estimação da variável latente, $h_t$, do modelo de volatilidade estocástica.
+
+\subsection{Adaptação do Método de \cite{mccormick} ao MVE} \label{secao:trololo}
+
+A partir da equação do sistema em \eqref{mvs:mvs}, a distribuição $(h_t | D_{t-1}, \mu, \phi)$ é encontrada:
+%
+\begin{align}
+  h_t &= \mu + \phi (h_{t - 1} - \mu) + \eta_t, \notag \\
+  (h_t | D_{t-1}, \mu, \phi) &= (\mu | D_{t-1}) + \phi (h_{t-1} | D_{t-1}) + (\phi\mu | D_{t-1}) + (\eta_t | D_{t-1}), \notag \\
+  (h_t | D_{t-1}, \mu, \phi) &= \mu + \phi (h_{t-1} | D_{t-1}) + \phi\mu + \eta_t, \notag \\
+  (h_t | D_{t-1}, \mu, \phi) &= \mu(1 - \phi) + \phi (h_{t-1} | D_{t-1}) + \eta_t. \label{est:mccormick_1}
+\end{align}
+%
+Seja, por hipótese:
+%
+\begin{equation}
+  (h_{t-1} | D_{t-1}) \sim \dnormal{\hat{m}_{t-1}}{\hat{C}_{t-1}}{}. \label{est:mccormick_2}
+\end{equation}
+%
+Como nas equações de atualização dos modelos lineares dinâmicos descritas na Seção \ref{eq_atualizacao} do Capítulo \ref{mld}, a distribuição de $(h_t | D_{t-1}, \mu, \phi)$, através de \eqref{est:mccormick_1} e \eqref{est:mccormick_2}, será:
+%
+\begin{align}
+  (h_t | D_{t - 1}, \mu, \phi) \sim \dnormal{\mu(1 - \phi) + \phi \hat{m}_{t-1}}{\phi^2 \hat{C}_{t-1} + \sigma_\eta^2}{}. \label{est:mccormick_3}
+\end{align}
+%
+Porém, seja a variância da distribuição em \eqref{est:mccormick_3} aproximada por:
+%
+\begin{equation}
+  R_t = \frac{\phi^2 \hat{C}_{t-1}}{\lambda_t}. \label{est:mccormick_4}
+\end{equation}
+%
+Nesse passo, o acréscimo aditivo natural na variância que surge das equações de atualização foi substituido por um fator de desconto $\lambda_t$ a ser determinado.
+
+Pelo Teorema de Bayes, a distribuição \textit{a posteriori}, $(h_t | D_t)$, é proporcional à distribuição \textit{a priori}, $(h_t | D_{t-1})$, atualizada pela verossimilhança:
+%
+\begin{equation}
+  p(h_t | D_t) \propto p(y_t | h_t) p(h_t | D_{t-1}). \label{est:mccormick_5}
+\end{equation}
+%
+Dessa maneira, a distribuição \textit{a posteriori} no lado esquerdo de \eqref{est:mccormick_5} será aproximada por uma distribuição normal cuja média será a moda (ou o máximo) do produto no lado direito.
+
+As distribuições no lado direito de \eqref{est:mccormick_5} são dadas por \eqref{mvs:mvs} e \eqref{est:mccormick_3}. Então, seja $L(h_t|\mu, \phi)$ dada por:
+%
+\begin{align}
+  L(h_t | \mu, \phi) &\propto p(y_t | h_t) p(h_t | D_{t-1}), \notag \\
+    &\propto e^{-\frac{h_t}{2}} \text{exp}\left\{-\frac{1}{2}e^{-h_t}y_t^2\right\} \times \notag \\
+    &\times R_t^{-\frac{1}{2}}\text{exp}\left\{-\frac{1}{2}R_t^{-1}\left[h_t - (\mu(1 - \phi) + \phi\hat{m}_{t-1})\right]^2\right\}. \label{est:mccormick_6}
+\end{align}
+%
+Toma-se o logaritmo de \eqref{est:mccormick_6}, de modo que, $\ln L(h_t | \mu, \phi) = l(h_t | \mu, \phi)$. Assim,
+%
+\begin{equation}
+  l(h_t | \mu, \phi) \propto -\frac{h_t}{2} - \frac{y_t^2}{2e^{h_t}} - \frac{1}{2} \ln{R_t} - \frac{1}{2 R_t}\left[h_t - (\mu(1 - \phi) + \phi\hat{m}_{t-1})\right]^2. \label{est:mccormick_7}
+\end{equation}
+%
+Com isso, iterativamente ao longo das $N$ observações, o estimador, $\hat{h}_t$, da variável latente, $h_t$, será:
+%
+\begin{equation}
+  \hat{h}_t = \hat{m}_t = \hat{m}_{t-1} - \frac{l'(\hat{m}_{t-1})}{l''(\hat{m}_{t-1})}.
+\end{equation}
+
+Para completar o processo de estimação de $h_t$ é preciso calcular as derivadas de \eqref{est:mccormick_7}. A algebra é muito simples e a primeira derivada é:
+
+\begin{equation}
+  \frac{d l(h_t | \mu, \phi)}{dh_t} = l'(h_t | \mu, \phi) = -\frac{1}{2} + \frac{y_t^2}{2 e^{h_t}} - \frac{1}{R_t} \left[h_t - (\mu(1 - \phi) + \phi\hat{m}_{t-1})\right]. \label{est:d1}
+\end{equation}
+%
+A segunda derivada, por sua vez, é:
+%
+\begin{equation}
+  \frac{d^2 l(h_t | \mu, \phi)}{dh_t^2} = l''(h_t | \mu, \phi) = - \frac{y_t^2}{2 e^{h_t}} - \frac{1}{R_t}. \label{est:d2}
+\end{equation}
+
+A variância da distribuição de $h_t$ ao longo do processo é atualizada por:
+%
+\begin{equation}
+  \hat{C}_t = -\frac{1}{l''(\hat{m}_{t-1})}. \label{est:variC}
+\end{equation}
+
+O valor do fator de desconto, $\lambda_t$, é calculado de modo a maximizar a distribuição preditiva $(y_t | D_{t-1})$:
+%
+\begin{equation}
+  p(y_t | D_{t-1}, \lambda_t) = \int_{h_t} p(y_t | h_t, D_{t-1})p(h_t | D_{t-1}, \lambda_t)dh_t. \label{est:integral}
+\end{equation}
+%
+Mas como não existe forma fechada para a integral em \eqref{est:integral}, é tomada uma aproximação de Laplace \citep{tierney} para essa distribuição preditiva:
+%
+\begin{equation}
+  p(y_t | D_{t-1}, \lambda_t) \approx (2\pi)^{\frac{1}{2}}\abs{\frac{1}{l''(\hat{m}_t)}}^{\frac{1}{2}} p(y_t | \hat{h}_t, D_{t-1}) p(\hat{h}_t|D_{t-1}, \lambda_t).
+\end{equation}
+%
+Onde, $p(y_t | \hat{h}_t, D_{t-1})$ é a distribuição das observações dada em \eqref{mvs:mvs} e  $p(\hat{h}_t|D_{t-1}, \lambda_t)$ é dada em \eqref{est:mccormick_3}.
+
+Assim, a metodologia proposta para se estimar os parâmetros do modelo de volatilidade estocástica a partir da adaptação inspirada em \cite{mccormick} acrescida à estratégia ASIS \citep{kastner} está concluída. As próximas etapas consistem em avaliar a consistência desse método alternativo utilizando dados simulados e testar também em dados reais.

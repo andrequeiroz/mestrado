@@ -1,0 +1,13 @@
+model {
+  y[1] ~ dnorm(0, exp(-h[1]))
+  h[1] ~ dnorm(mu + phi * (h0 - mu), 1 / sigma2)
+  for (t in 2:N) {
+    y[t] ~ dnorm(0, exp(-h[t]))
+    h[t] ~ dnorm(mu + phi * (h[t - 1] - mu), 1 / sigma2)
+  }
+  h0 ~ dnorm(mu, (1 - phi^2) / sigma2)
+  mu ~ dnorm(0, 1 / 100)
+  phi0 ~ dbeta(20.0, 1.5)
+  phi <- 2 * phi0 - 1
+  sigma2 ~ dgamma(0.5, 0.5)
+}

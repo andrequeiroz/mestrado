@@ -1,0 +1,15 @@
+model {
+  for (j in 1:K) {
+    y[j, 1] ~ dnorm(0.0, exp(-h[j, 1]))
+    h[j, 1] ~ dnorm(mu[j], 1 / sigma[j]^2)
+    for (t in 2:N) {
+      y[j, t] ~ dnorm(0.0, exp(-h[j, t]))
+      h[j, t] ~ dnorm(mu[j] + phi[j] * (h[j, t - 1] - mu[j]), 1 / sigma[j]^2)
+    }
+    mu[j] ~ dnorm(0.0, 0.01)
+    phi0[j] ~ dbeta(1.0, 1.0)
+    phi[j] <- 2 * phi0[j] - 1
+    sigma2[j] ~ dgamma(0.5, 0.5)
+    sigma[j] <- sqrt(sigma2[j])
+  }
+}

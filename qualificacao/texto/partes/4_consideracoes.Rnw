@@ -1,0 +1,10 @@
+\chapter*{Considerações Preliminares}
+\addcontentsline{toc}{chapter}{Considerações Preliminares}
+%
+Essa primeira etapa do trabalho foi concluída com sucesso, uma vez que o objetivo principal era entender o modelo de volatilidade estocástica junto com suas principais dificuldades. Em suma, o processo de estimação dos parâmetros do modelo é bastante complicado, uma vez que mesmo em situações com dados simulados os resultados podem ser inconclusivos. Isso ocorre principalmente quando os valores de $\phi$ ou $\sigma_\eta^2$ são próximos de zero. O que faz sentido, uma vez que esses parâmetros são dominantes na modelagem da variável latente $h_t$, e se seus valores forem nulos deve-se inclusive questionar a aplicabilidade do MVE.
+
+Para a dissertação, será estudado o algoritmo \textit{forward filtering-backward sampling} proposto por \cite{carter}, \cite{fruhwirth} e \cite{shephard94}. Ele é baseado no amostrador de Gibbs e será o elo de ligação entre o modelo de volatilidade estocástica e a estimação dos seus parâmetros como uma modelo de espaço-estado.
+
+Um estudo sobre a convergência dos parâmetros em algoritmos baseados em Monte Carlo em cadeias de Markov, bem como a própria estrutura desses algoritmos será detalhado futuramente.
+
+Por fim, será feita uma análise de valores preditos pelo modelo de volatilidade estocástico em conjuntos simulados, bem como em dados reais.

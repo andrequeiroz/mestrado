@@ -1,0 +1,313 @@
+\chapter{Modelo de Volatilidade Estocástica} \label{mvs}
+
+O modelo de volatilidade estocástica (MVE) surgiu como uma alternativa aos tradicionais modelos ARCH \citep{engle} e GARCH \citep{bollerslev}. Nesse modelo, a variabilidade dos dados deixa de ter um padrão determinístico e passa, também, a ser interpretada como uma variação aleatória.
+
+\section{Definição do Modelo Canônico}
+
+A definição do modelo canônico de volatilidade estocástica foi inicialmente proposta por \cite{taylor}. Seja uma variável observada, $Y_t$, que segue a seguinte formulação:
+%
+\begin{equation}
+  Y_t = \rho_t\delta_t, \label{mvs:inic_y}
+\end{equation}
+%
+em que $\rho_t$ é a \textit{volatilidade} no tempo $t$ e $\delta_t$ é um ruído com distribuição normal padrão. Seja o logaritmo do quadrado da volatilidade no tempo $t$ modelado por um processo latente auto-regressivo de primeira ordem. Dessa maneira,
+%
+\begin{equation}
+  \ln \rho_t^2 = h_t
+\end{equation}
+%
+é descrito por um modelo AR(1), ver equação \eqref{mvs:mvs}.
+
+\cite{kim} apresenta o modelo canônico para dados igualmente espaçados. O modelo é basicamente composto pela equação que descreve a variável observada $Y_t$ em função de uma variável latente que capta a variabilidade dos dados no decorrer do tempo, e pelo processo auto-regressivo de primeira ordem que modela a estrutura da volatilidade. Assim, para $t = 1, \ldots, N$, o modelo canônico é expresso por:
+%
+\begin{equation}
+\text{\textbf{Modelo Canônico}}:
+\begin{cases}
+  Y_t &= e^{\frac{h_t}{2}} \delta_t, \\
+  h_t &= \mu + \phi(h_{t - 1} - \mu) + \eta_t, \\
+  h_0 &\sim \dnormalxt{\mu}{\frac{\sigma_\eta^2}{1 - \phi^2}}{}.
+\end{cases} \label{mvs:mvs}
+\end{equation}
+%
+Os termos $\delta_t$ e $\eta_t$ são ruídos Gaussianos, independentes no tempo e entre si, com distribuições:
+%
+\begin{equation}
+  \delta_t \sim \dnormal{0}{1}{} \quad\text{e}\quad \eta_t \sim \dnormalxt{0}{\sigma_\eta^2}{}. \label{mvs:eq_erros}
+\end{equation}
+
+Observe que, $Y_t \sim \dnormalxt{0}{e^{h_t}}{}$, ou como requerido pelo modelo, a variância das observações é totalmente descrita no tempo $t$ em função da variável latente $h_t$. O conjunto de parâmetros do modelo a serem estimados é definido pelo vetor:
+%
+\begin{equation}
+  \vetor{\psi} = (\mu, \phi, \sigma_\eta^2). \label{mvs:psi}
+\end{equation}
+
+\section{Um Modelo de Espaço-Estado}\label{mvs:sec_ee}
+
+O modelo de volatilidade estocástica pode ser reescrito utilizando a notação de um modelo de espaço-estado proposta por \cite{west}, descrita no Capítulo \ref{mld}. Uma das vantagens disso é poder utilizar o aparato ferramental e metodológico já implementado computacionalmente, (\citealp{petrone} e \citealp{petris}). Tal formulação será útil nas subseções \ref{mvs:f4}, \ref{mvs:f5} e \ref{secao:trololo}.
+
+\subsection{Equação das Observações}
+
+A redefinição do modelo canônico, como um modelo de espaço-estado, pode ser feita pela extensão da proposta em \cite{zivot} descrita a seguir.
+
+Pela definição em \eqref{mvs:mvs}:
+%
+\begin{equation}
+  Y_t = e^{\frac{h_t}{2}} \delta_t.
+\end{equation}
+%
+Então,
+%
+\begin{equation}
+  \ln Y_t^2 = h_t + \ln\delta_t^2. \label{mvs:eq_obs_reescrita}
+\end{equation}
+%
+Ainda, pode-se fazer $\varepsilon_t = \ln \delta_t^2 - \E{\ln \delta_t^2}$ e escrever:
+%
+\begin{equation}
+  \ln Y_t^2 = h_t + \E{\ln \delta_t^2} + \varepsilon_t. \label{mvs:eq_obs_reescrita_ingenua}
+\end{equation}
+%
+de modo que $\varepsilon_t \sim (0, \var{\ln\delta_t^2})$ seja um ruído em torno de zero.
+
+Apesar dessa transformação linearizar o problema, o pressuposto Gaussiano de $\delta_t$ não pode mais ser mantido. \cite{koopman} afirma que isso não impede a utilização das técnicas associadas aos modelos Gaussianos, uma vez que se assuma que a distribuição de $\varepsilon_t$ seja aproximadamente normal com média zero. Entretanto, \cite{omori} sugere o uso de uma mistura de $r = 10$ normais, que se aproxima da distribuição do erro $\ln\delta_t^2$ na equação \eqref{mvs:eq_obs_reescrita}, isto é:
+%
+\begin{equation}
+  \ln\delta_t^2 \approx \xi_t \sim \soma{j = 1}{10} w_j \dnormalxt{m_j}{s_j^2}{}. \label{mvs:eq_mistura}
+\end{equation}
+%
+Os pesos, as médias e as variâncias, $w_j$, $m_j$ e $s_j^2$, respectivamente para $j = 1, \ldots, 10$, das 10 distribuições sugeridas por \cite{omori} são detalhados na Tabela \ref{mvs:tab_mistura}.
+%
+\begin{table}[ht]
+  \centering
+  \caption{Parâmetros da distribuição de $\xi_t$ em \eqref{mvs:eq_mistura}, \citep{omori}.}
+  \begin{tabular}{lrrrrrrrrrr}
+    \hline
+    \multicolumn{1}{c}{$j$} & \multicolumn{1}{c}{1} & \multicolumn{1}{c}{2} & \multicolumn{1}{c}{3} & \multicolumn{1}{c}{4} & \multicolumn{1}{c}{5} & \multicolumn{1}{c}{6} & \multicolumn{1}{c}{7} & \multicolumn{1}{c}{8} & \multicolumn{1}{c}{9} & \multicolumn{1}{c}{10} \\
+    \hline
+    $w_j$ & 0,006 & 0,048 & 0,131 & 0,207 & 0,227 & 0,188 & 0,120 & 0,056 & 0,016 & 0,001 \\
+    $m_j$ & 1,927 & 1,347 & 0,735 & 0,023 & -0,852 & -1,973 & -3,468 & -5,552 & -8,684 & -14,650 \\
+    $s_j^2$ & 0,113 & 0,178 & 0,268 & 0,406 & 0,627 & 0,986 & 1,575 & 2,545 & 4,166 & 7,333 \\
+    \hline
+  \end{tabular}
+  \label{mvs:tab_mistura}
+\end{table}
+
+A Figura \ref{mvs:fig_comparacao_erros} mostra a comparação entre as distribuições de $\ln \delta_t^2$, que é o verdadeiro erro do modelo, de $\varepsilon_t$, que corresponde à aproximação Gaussiana ingênua, e de $\xi_t$, que é a mistura de 10 normais sugerida por \cite{omori}. Pode-se observar que a aproximação Gaussiana ingênua é bastante insatisfatória quando comparada à aproximação proposta por \cite{omori}.
+%
+\begin{figure}[ht]
+\centering
+\begin{minipage}{0.8\linewidth}
+<<mvs-comparacao-erros, include = TRUE, eval = TRUE, echo = FALSE, opts.label = "regular_fig">>=
+nm <- norMix(mu = c(1.92677, 1.34744, 0.73504, 0.02266, -0.85173, -1.97278,
+                    -3.46788, -5.55246, -8.68384, -14.65000),
+             sigma = sqrt(c(0.11265, 0.17788, 0.26768, 0.40611, 0.62699,
+                            0.98583, 1.57469, 2.54498, 4.16591, 7.33342)),
+             w = c(0.00609, 0.04775, 0.13057, 0.20674, 0.22715, 0.18842,
+                   0.12047, 0.05591, 0.01575, 0.00115))
+
+data.frame(x = c(-5, 5)) %>%
+    ggplot(mapping = aes(x = x)) +
+    stat_function(fun = function(x) {exp((x - exp(x)) / 2) / sqrt(2 * pi)},
+                  aes(colour = "black", linetype = "black")) +
+    stat_function(fun = dnorm, aes(colour = "blue", linetype = "blue"),
+                  args = list(sd = sqrt(4.935))) +
+    stat_function(fun = dnorMix, aes(colour = "red", linetype = "red"),
+                  args = list(obj = nm)) +
+    labs(x = "$\\epsilon$", y = "$f(\\epsilon)$") +
+    scale_linetype_manual("", values = c("twodash", "solid", "dashed"),
+                          guide = FALSE) +
+    scale_colour_manual("",
+                        guide = guide_legend(override.aes =
+                                                 list(linetype = c("twodash",
+                                                                   "solid",
+                                                                   "dashed"))),
+                        labels = c("$\\ln\\delta_t^2$", "$\\varepsilon_t$",
+                                   "$\\xi_t$"),
+                        values = c("black", "blue", "red")) +
+    theme(legend.position = c(0.90, 0.75))
+@
+\caption{Comparação das distribuições de $\ln \delta_t^2$, $\varepsilon_t$ e $\xi_t$.}
+\label{mvs:fig_comparacao_erros}
+\end{minipage}
+\end{figure}
+
+\subsection{Equação do Sistema}
+
+A equação que define a evolução da variável latente, $h_t$, em \eqref{mvs:mvs} pode ser reescrita:
+%
+\begin{equation}
+  h_t = \mu + \phi(h_{t - 1} - \mu) + \eta_t,
+\end{equation}
+%
+então,
+%
+\begin{equation}
+  h_t = (1 - \phi)\mu + \phi h_{t - 1} + \eta_t. \label{mvs:eq_sistema_reescrita}
+\end{equation}
+
+Como essa transformação é um mero rearranjo dos termos, a distribuição Gaussiana dos erros em $\eta_t$ não foi perdida, como ocorre no caso da equação das observações em \eqref{mvs:eq_obs_reescrita}.
+
+\subsection{Modelo Completo}
+
+Utilizando a notação de espaço-estado para os modelos lineares dinâmicos em \cite{west}, descrita no capítulo anterior, a equação das observações \eqref{mvs:eq_obs_reescrita} pode ser escrita na forma da equação \eqref{mld:eq_obs}:
+%
+\begin{equation}
+Z_t = \ln Y_t^2 = h_t + \E{\ln \delta_t^2} + \varepsilon_t,
+\end{equation}
+%
+logo,
+%
+\begin{equation}
+Z_t = \ln Y_t^2 = \begin{bmatrix}1 & 0 & 1\end{bmatrix}\begin{bmatrix}h_t \\ \mu \\ \E{\ln \delta_t^2} \end{bmatrix} + \varepsilon_t =  \vetor{F}'_t \vetor{\theta}_t + \nu_t. \label{mvs:eq_obs_matrix}
+\end{equation}
+%
+Já a equação do sistema \eqref{mvs:eq_sistema_reescrita} pode ser escrita na forma da equação \eqref{mld:eq_sis}:
+%
+\begin{equation}
+  h_t = \phi h_{t - 1} + (1 - \phi)\mu + \eta_t,
+\end{equation}
+%
+então,
+%        
+\begin{equation}
+	\vetor{\theta}_t = \begin{bmatrix}h_t \\ \mu \\ \E{\ln \delta_t^2} \end{bmatrix} = \begin{bmatrix}\phi & 1 - \phi & 0 \\ 0 & 1 & 0 \\ 0 & 0 & 1 \end{bmatrix} \begin{bmatrix}h_{t - 1} \\ \mu \\ \E{\ln \delta_t^2} \end{bmatrix} + \begin{bmatrix}\eta_t \\ 0 \\ 0 \end{bmatrix} =  \vetor{G}_t \vetor{\theta}_{t - 1} + \vetor{\omega}_t. \label{mvs:eq_sistema_matrix}
+\end{equation}
+
+O modelo de volatilidade estocástica é definido, então, como um modelo de espaço-estado constante através das matrizes:
+%
+\begin{equation}
+	\vetor{\theta}_t = \begin{bmatrix}h_t \\ \mu \\ \E{\ln \delta_t^2}\end{bmatrix},\quad \vetor{F}_t = \vetor{F} = \begin{bmatrix}1 \\ 0 \\ 1\end{bmatrix}\quad\text{e}\quad \vetor{G}_t = \vetor{G} = \begin{bmatrix}\phi & 1 - \phi & 0 \\ 0 & 1 & 0 \\ 0 & 0 & 1\end{bmatrix}. \label{mvs:eq_matrizes}
+\end{equation}
+%
+Os termos que representam os erros nas equações das observações e do sistema são:
+\begin{equation}
+  \nu_t = \varepsilon_t\quad\text{e}\quad \vetor{\omega}_t = \begin{bmatrix}\eta_t \\ 0 \\ 0 \end{bmatrix}. \label{mvs:eq_matrizes_erros}
+\end{equation}
+%
+Consequentemente, as variâncias de $\nu_t$ e $\vetor{\omega}_t$ são definidas, respectivamente, por:
+%
+\begin{equation}
+	V_t = V = \var{\varepsilon_t}\quad\text{e}\quad \vetor{W}_t = \vetor{W} = \begin{bmatrix}\sigma_\eta^2 & 0 & 0 \\ 0 & 0 & 0 \\ 0 & 0 & 0 \end{bmatrix}. \label{mvs:eq_matrizes_var}
+\end{equation}
+%
+A variância $V$ é obtida diretamente através da distribuição de $\varepsilon_t$. A matriz $\vetor{W}$, por sua vez, é determinada a partir da matriz $\vetor{\omega}_t$ em \eqref{mvs:eq_matrizes_erros} e da distribuição de $\eta_t$ em \eqref{mvs:eq_erros}.
+
+Há de se destacar que, apesar de $h_t$ ser a variável que expressa a evolução do sistema pela definição do próprio modelo em \eqref{mvs:mvs}, o vetor $\vetor{\theta}_t$, que capta essa característica, só pôde ser escrito em função de $h_t$, que é dinâmico, e dos dois termos estáticos, o parâmetro a ser estimado $\mu$ e a constante $\E{\ln \delta_t^2}$.
+
+A distribuição \textit{a priori} de $\vetor{\theta}_t$ é definida por $\vetor{\theta}_0 \sim \dnormal{\vetor{m}_0}{\vetor{C}_0}{}$, onde:
+%
+\begin{equation}
+	\vetor{m}_0 = \begin{bmatrix}\mu \\ \mu \\ \E{\ln \delta_t^2} \end{bmatrix}\quad\text{e}\quad \vetor{C}_0 = \begin{bmatrix}\frac{\sigma_\eta^2}{1 - \phi^2} & 0 & 0 \\ 0 & 0 & 0 \\ 0 & 0 & 0 \end{bmatrix}. \label{mvs:eq_var_matrix_priori}
+\end{equation}
+
+Em suma, o modelo de volatilidade estocástica de acordo com a notação de \cite{west} é escrito como:
+%
+\begin{equation}
+  \begin{split}
+    &\text{\textbf{Modelo de}} \\ &\text{\textbf{Espaço-Estado}}:
+  \end{split}
+\begin{cases}
+  \ln Y_t^2 = \vetor{F}'\vetor{\theta}_t + \varepsilon_t, \\
+  \vetor{\theta}_t = \vetor{G}\vetor{\theta}_{t-1} + \vetor{\omega}_t, \\
+  \vetor{\theta}_0 \sim \dnormal{\vetor{m}_0}{\vetor{C}_0}{},
+\end{cases} \label{mvs:mee}
+\end{equation}
+%
+em que a quádrupla $\{\vetor{F}, \vetor{G}, V, \vetor{W}\}$ é dada por:
+%
+\begin{equation}
+  \{\vetor{F}, \vetor{G}, V, \vetor{W}\} = \left\{\begin{bmatrix}1 \\ 0 \\ 1\end{bmatrix} , \begin{bmatrix}\phi & 1 - \phi & 0 \\ 0 & 1 & 0 \\ 0 & 0 & 1\end{bmatrix}, \var{\varepsilon_t}, \begin{bmatrix}\sigma_\eta^2 & 0 & 0 \\ 0 & 0 & 0 \\ 0 & 0 & 0\end{bmatrix}\right\}. \label{mvs:quadrupla}
+\end{equation}
+
+\section{Modelo Parcialmente Não Centralizado}
+
+O modelo canônico em \eqref{mvs:mvs} também é conhecido como modelo centralizado. Uma forma equivalente de redefinir esse modelo é levando o parâmetro $\mu$, da equação do sistema, para a equação das observações. Seja,
+%
+\begin{equation}
+  h_t^* = h_t - \mu, \label{mvs:h_estrela}
+\end{equation}
+%
+uma nova variável latente, que é uma mera transformação linear da variável latente $h_t$ em \eqref{mvs:mvs}. Então pode-se reescrever a equação do sistema na forma alternativa:
+%
+\begin{align}
+  h_t &= \mu + \phi (h_{t-1} - \mu) + \eta_t, \notag \\
+  h_t - \mu &= \phi (h_{t-1} - \mu) + \eta_t, \notag \\
+  h_t^* &= \phi h_{t-1}^* + \eta_t. \label{mvs:eq_sistema_ncp}
+\end{align}
+%
+De maneira semelhante, a equação das observações será reescrita como:
+%
+\begin{align}
+  Y_t &= e^{\frac{h_t}{2}} \delta_t, \notag \\
+  Y_t &= e^{\frac{h_t^* + \mu}{2}} \delta_t, \notag \\
+  Y_t &= e^{\frac{\mu}{2}}e^{\frac{h_t^*}{2}}\delta_t. \label{mvs:eq_observacoes_ncp}
+\end{align}
+%
+E a distribuição inicial da variável latente passa a ser:
+%
+\begin{equation}
+  h_0^* \sim \dnormalxt{0}{\frac{\sigma_\eta^2}{1 - \phi^2}}{}. \label{mvs:priori_h0_ncp}
+\end{equation}
+
+O conjunto das equações \eqref{mvs:eq_sistema_ncp}, \eqref{mvs:eq_observacoes_ncp} e \eqref{mvs:priori_h0_ncp}, resumidas em \eqref{mvs:mvs_ncp}, define o modelo parcialmente não centralizado \citep{prado}:
+%
+\begin{equation}
+  \begin{split}
+    &\text{\textbf{Modelo Parcialmente}} \\ &\text{\textbf{Não Centralizado}}:
+  \end{split}
+\begin{cases}
+  Y_t &= e^{\frac{\mu}{2}}e^{\frac{h_t^*}{2}} \delta_t, \\
+  h_t^* &= \phi h_{t - 1}^* + \eta_t, \\
+  h_0^* &\sim \dnormalxt{0}{\frac{\sigma_\eta^2}{1 - \phi^2}}{}.
+\end{cases} \label{mvs:mvs_ncp}
+\end{equation}
+
+\section{Modelo Não Centralizado}
+
+A última reparametrização do modelo canônico em \eqref{mvs:mvs}, a ser apresentada, é proposta em \cite{kastner}. Ele recebe o nome de modelo \textbf{completamente} não centralizado. Para efeitos de simplificação, este será referido apenas como modelo não centralizado. A transformação linear na variável latente, que conduz ao modelo não centralizado é definida por:
+%
+\begin{equation}
+  \tilde{h}_t = \frac{h_t - \mu}{\sigma_\eta}. \label{mvs:h_tilde}
+\end{equation}
+
+A partir de \eqref{mvs:h_tilde} é possível reescrever a equação do sistema, que passa a ser:
+%
+\begin{align}
+  h_t &= \mu + \phi (h_{t-1} - \mu) + \eta_t, \notag \\
+  h_t - \mu &= \phi (h_{t-1} - \mu) + \eta_t, \notag \\
+  \pxt{\frac{h_t - \mu}{\sigma_\eta}} &= \phi \pxt{\frac{h_{t-1} - \mu}{\sigma_\eta}} + \frac{\eta_t}{\sigma_\eta}, \notag \\
+  \tilde{h}_t &= \phi \tilde{h}_{t-1} + \tilde{\eta}_t. \label{mvs:eq_sistema_nc}
+\end{align}
+%
+Diferentemente da transformação \eqref{mvs:h_estrela} no caso parcialmente não centralizado, a transformação \eqref{mvs:h_tilde} para o caso não centralizado altera a distribuição do erro $\eta_t$. Antes, Gaussiano com média zero e variância $\sigma_\eta^2$, conforme definido em \eqref{mvs:eq_erros}, o novo erro, $\tilde{\eta}_t$, passa a ter distribuição normal padrão:
+%
+\begin{equation}
+  \tilde{\eta}_t \sim \dnormal{0}{1}{}. \label{mvs:eq_erro_nc}
+\end{equation}
+%
+A equação das observações é reescrita como:
+%
+\begin{align}
+  Y_t &= e^{\frac{h_t}{2}} \delta_t, \notag \\
+  Y_t &= e^{\frac{\sigma_\eta\tilde{h}_t + \mu}{2}} \delta_t, \notag \\
+  Y_t &= e^{\frac{\mu}{2}}e^{\sigma_\eta\frac{\tilde{h}_t}{2}}\delta_t. \label{mvs:eq_observacoes_nc}
+\end{align}
+%
+E, por fim, a distribuição inicial de $\tilde{h}_t$ é dada por:
+%
+\begin{equation}
+  \tilde{h}_0 \sim \dnormalxt{0}{\frac{1}{1 - \phi^2}}{}. \label{mvs:priori_h0_nc}
+\end{equation}
+
+De forma sintetizada, o modelo de volatilidade estocástica canônico reparametrizado para a forma completamente não centralizada é expresso por:
+%
+\begin{equation}
+  \begin{split}
+    &\text{\textbf{Modelo}} \\ &\text{\textbf{Não Centralizado}}:
+  \end{split}
+\begin{cases}
+  Y_t &= e^{\frac{\mu}{2}}e^{\sigma_\eta\frac{\tilde{h}_t}{2}}\delta_t, \\
+  \tilde{h}_t &= \phi \tilde{h}_{t-1} + \tilde{\eta}_t, \\
+  \tilde{h}_0 &\sim \dnormalxt{0}{\frac{1}{1 - \phi^2}}{}.
+\end{cases} \label{mvs:mvs_nc}
+\end{equation}

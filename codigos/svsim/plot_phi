@@ -1,0 +1,6 @@
+width = 0.005
+hist(x, width) = width * floor(x / width) + width / 1.0
+set boxwidth width * 1
+set style fill solid 0.5
+plot "/tmp/resultado" u (hist($2, width)):(1.0) smooth freq w boxes lc rgb"red" notitle
+pause -1

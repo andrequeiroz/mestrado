@@ -1,0 +1,155 @@
+\documentclass[a4paper, 12pt, openany]{report}
+\usepackage[top = 3cm, right = 2cm, bottom = 2cm, left = 3cm]{geometry}
+\usepackage[brazilian]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{setspace}
+\usepackage{indentfirst}
+\usepackage{amsmath, amsfonts, amssymb, amsopn, amsthm}
+\usepackage{chngcntr}
+\usepackage[round, authoryear]{natbib}
+\usepackage{xcolor}
+\usepackage{multicol}
+\usepackage{multirow}
+\usepackage[hidelinks]{hyperref}
+\usepackage{icomma}
+\usepackage{listings}
+\usepackage{bm}
+\usepackage{ragged2e}
+\usepackage{tikz}
+\usepackage{graphicx}
+
+\definecolor{azulUnB}{RGB}{0, 55, 111}
+\definecolor{verdeUnB}{RGB}{0, 119, 21}
+
+\newcommand{\autor}{André Silva de Queiroz}
+\newcommand{\titulo}{Um Estudo sobre Modelos para Volatilidade Estocástica}
+\newcommand{\orientador}{Prof.$^a$ Cibele Queiroz da Silva, Ph.D.}
+\newcommand{\mes}{Junho}
+\newcommand{\ano}{2015}
+\newcommand{\defesa}{18 de Junho de 2015}
+
+\onehalfspacing
+\setlength{\parindent}{1.25cm}
+
+\counterwithin{equation}{chapter}
+\counterwithin{figure}{chapter}
+\counterwithin{table}{chapter}
+
+\newcommand{\pxt}[1]{\left(#1\right)}
+\newcommand{\soma}[2]{\sum\limits_{#1}^{#2}}
+\newcommand{\abs}[1]{\left|#1\right|}
+
+\newcommand{\E}[1]{\text{E}(#1)}
+\newcommand{\var}[1]{\text{Var}(#1)}
+\newcommand{\cov}[1]{\text{Cov}(#1)}
+
+\newcommand{\dnormal}[3]{\mathcal{N}_{#3}(#1, #2)}
+\newcommand{\dnormalxt}[3]{\mathcal{N}_{#3}\pxt{#1, #2}}
+\newcommand{\dbeta}[3]{\mathcal{B}_{#3}(#1, #2)}
+\newcommand{\dbetaxt}[3]{\mathcal{B}_{#3}\pxt{#1, #2}}
+\newcommand{\dgamma}[3]{\mathcal{G}_{#3}(#1, #2)}
+\newcommand{\dgammaxt}[3]{\mathcal{G}_{#3}\pxt{#1, #2}}
+
+\newcommand{\vetor}[1]{\bm{#1}}
+
+\newenvironment{comentario}{\vspace{0.5cm}\noindent\textcolor{red}{\textit{\underline{Comentário}}}\vspace{0.2cm}\newline}{\newline\strut\hfill$\blacksquare$\vspace{0.2cm}}
+
+%Define BUGS Language
+\lstdefinelanguage{BUGS}{
+  morekeywords = {model}
+  sensitive = false,
+  morecomment=[l]{\#},
+  basicstyle = \normalsize\sffamily,
+  commentstyle = \color{blue}\sffamily,
+  breaklines = true,
+  breakatwhitespace = true,
+  columns = fullflexible,
+  frame = trBL,
+  numbers = left,
+  numberstyle = \scriptsize\ttfamily,
+  stepnumber = 1,
+  framexleftmargin = 0cm,
+  xleftmargin = 1cm,
+  xrightmargin = 1cm
+}
+
+\lstdefinelanguage{R}{
+  morekeywords = {function}
+  sensitive = false,
+  morecomment=[l]{\#},
+  basicstyle = \normalsize\ttfamily,
+  commentstyle = \color{blue}\ttfamily,
+  breaklines = true,
+  breakatwhitespace = true,
+  columns = fullflexible,
+  frame = trBL,
+  numbers = left,
+  numberstyle = \scriptsize\ttfamily,
+  stepnumber = 1,
+  framexleftmargin = 0cm,
+  xleftmargin = 1cm,
+  xrightmargin = 1cm
+}
+
+\renewcommand{\lstlistingname}{Código}
+
+\begin{document}
+
+%\maketitle
+
+<<setup, echo = FALSE, include = FALSE>>=
+library(DBI)
+library(dplyr)
+library(ggplot2)
+library(grid)
+library(knitr)
+library(nor1mix)
+library(tikzDevice)
+
+set.seed(2347)
+options(OutDec = ",", tikzDefaultEngine = "xetex")
+
+theme_set(theme_bw())
+theme_update(panel.border = element_blank(), axis.line = element_line(),
+             axis.title = element_text(size = 18),
+             axis.title.y = element_text(vjust = 1.2, angle = 90),
+             axis.text = element_text(size = 14),
+             legend.text = element_text(size = 18),
+             legend.title = element_text(size = 18),
+             legend.key.size = unit(0.8, "cm"),
+             legend.background = element_blank(),
+             strip.text = element_text(size = 18),
+             title = element_text(size = 16))
+
+opts_template$set(regular_fig = list(dev = "tikz",
+                                     R.options = list(OutDec = ","),
+                                     fig.width = 9, fig.height = 4,
+                                     fig.align = "center"),
+                  triple_fig = list(dev = "tikz",
+                                    R.options = list(OutDec = ","),
+                                    fig.width = 8, fig.height = 3,
+                                    fig.align = "center"))
+
+knit_hooks$set(document = function(x) {
+    sub("\\usepackage[]{color}", "\\usepackage{xcolor}", x, fixed = TRUE)
+})
+@
+
+\pagenumbering{roman}
+\include{partes/capa}
+\tableofcontents
+
+\pagenumbering{arabic}
+\setcounter{page}{1}
+<<review, child = paste("./partes", list.files("./partes", pattern = "^[0-9]"), sep = "/")>>=
+@
+
+\bibliographystyle{apa}
+\bibliography{../../mestrado}
+
+<<anexo, child = "./partes/anexo.Rnw">>=
+@
+
+\end{document}

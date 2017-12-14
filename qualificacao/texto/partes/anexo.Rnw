@@ -1,0 +1,23 @@
+\appendix
+\chapter{Códigos-Fonte} \label{chpt:sc}
+
+\begin{lstlisting}[language=R, caption=Função Responsável por Gerar os Dados Simulados., label=mvs:sv_data]
+sv_data <- function(n, mu, phi, sigma) {
+  h0 <- rnorm(1, mu, sigma / sqrt(1 - phi ** 2))
+  h <- rep(mu + phi * (h0 - mu) + sigma * rnorm(1), n)
+  y <- rep(exp(h[1] / 2) * rnorm(1), n)
+  for(i in 2:n){
+    h[i] <- mu + phi * (h[i -1] - mu) + sigma * rnorm(1)
+    y[i] <- exp(h[i] / 2) * rnorm(1)
+  }
+  return(data.frame(y = y, h = h))
+}
+\end{lstlisting}
+
+\lstinputlisting[language=BUGS, caption=Modelo Canônico de Volatilidade Estocástica em JAGS definido em \eqref{mvs:mvs}., label=mvs:jags_model]{../../modelos/svsim/svsim.jags.model}
+
+\lstinputlisting[language=BUGS, caption=Modelo I de Volatilidade Estocástica em JAGS definido em \eqref{o3:m1}., label=o3:model1]{../../modelos/o3/o3.jags.model1}
+
+\newpage
+
+\lstinputlisting[language=BUGS, caption=Modelo II de Volatilidade Estocástica em JAGS definido em \eqref{o3:m2}., label=o3:model2]{../../modelos/o3/o3.jags.model2}

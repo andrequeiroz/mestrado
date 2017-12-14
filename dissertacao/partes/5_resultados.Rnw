@@ -1,0 +1,774 @@
+<<resultados>>=
+link <- dbConnect(RSQLite::SQLite(), "../../dados/svsim2.db")
+link2 <- dbConnect(RSQLite::SQLite(), "../../dados/svsim_resultados.db")
+
+dados_sim <- "SELECT y AS a, h AS b
+              FROM p09s05
+              WHERE k = 1" %>%
+             dbGetQuery(link, .) %>%
+             gather(ind, values) %>%
+             mutate(t = 1:n(), t = ifelse(ind == "b", t - n() / 2, t))
+
+## gráficos
+comp_h <- function(fase) {
+    h_real <- dados_sim %>%
+        filter(ind == "b") %>%
+        select(t, values)
+
+    paste("SELECT t, media
+           FROM h
+           WHERE fase =", fase) %>%
+        dbGetQuery(link2, .) %>%
+        inner_join(h_real, by = "t") %>%
+        gather(variable, value, -t) %>%
+        ggplot(aes(x = t, y = value, col = variable)) +
+        geom_line(size = 0.5) +
+        labs(x = "$t$", y = "") +
+        scale_colour_manual("", labels = c("$\\bar{\\hat{h}}_t$", "$h_t$"),
+                            values = c("red", "black")) +
+        theme(legend.position = c(0.90, 0.25)) -> g
+
+    plot(g)
+}
+
+g_result <- function(p, s, k) {
+    options(OutDec = ".")
+    paste("SELECT mu AS V1, phi AS V2, sigma2 AS V3
+           FROM resultados
+           WHERE p =", p, "AND s =", s, "AND k =", k, "--lambda = 0.54") %>%
+        dbGetQuery(link2, .) -> tmp
+    options(OutDec = ",")
+
+    ggplot(tmp, aes(x = 1:1000, y = V1)) +
+        geom_line(size = 0.5) +
+        labs(x = "$t$", y = "$\\mu$") +
+        geom_hline(yintercept = -5.4, col = "red") -> g
+    plot(g)
+
+    ggplot(tmp, aes(x = V1, y = ..density..)) +
+        geom_histogram(binwidth = 0.4) +
+        labs(x = "$\\mu$", y = "") +
+        geom_vline(xintercept = -5.4, col = "red") -> g
+    plot(g)
+
+    ggplot(tmp, aes(x = 1:1000, y = V2)) +
+        geom_line(size = 0.5) +
+        labs(x = "$t$", y = "$\\phi$") +
+        geom_hline(yintercept = p, col = "red") -> g
+    plot(g)
+
+    ggplot(tmp, aes(x = V2, y = ..density..)) +
+        geom_histogram(binwidth = 0.001) +
+        labs(x = "$\\phi$", y = "") +
+        geom_vline(xintercept = p, col = "red") -> g
+    plot(g)
+
+    ggplot(tmp, aes(x = 1:1000, y = V3)) +
+        geom_line(size = 0.5) +
+        labs(x = "$t$", y = "$\\sigma_\\eta^2$") +
+        geom_hline(yintercept = s ** 2, col = "red") -> g
+    plot(g)
+
+    ggplot(tmp, aes(x = V3, y = ..density..)) +
+        geom_histogram(binwidth = 0.025) +
+        labs(x = "$\\sigma_\\eta^2$", y = "") +
+        geom_vline(xintercept = s ** 2, col = "red") -> g
+    plot(g)
+}
+
+comp_jags <- function(vp, vs, vk) {
+
+    tmp <- dbGetQuery(link2, "SELECT * FROM resultados") %>%
+        filter(p == vp, s == vs, k == vk) %>%
+        select(mu, phi, sigma2) %>%
+        bind_rows(dbGetQuery(link, "SELECT * FROM jags") %>%
+                  filter(p == vp, s == vs, k == vk) %>%
+                  select(mu, phi, sigma2)) %>%
+        mutate(origem = rep(c("ASIS", "JAGS"), each = 1000))
+
+    ggplot(tmp, aes(x = mu, fill = origem)) +
+        geom_density(alpha = 0.4) +
+        labs(x = "$\\mu$", y = "") +
+        geom_vline(xintercept = -5.4, colour = "red") +
+        scale_fill_manual("", labels = c("ASIS", "JAGS"),
+                          values = c("black", "blue")) +
+        theme(legend.position = c(0.9, 0.75)) -> g
+    plot(g)
+
+    ggplot(tmp, aes(x = phi, fill = origem)) +
+        geom_density(alpha = 0.4) +
+        labs(x = "$\\phi$", y = "") +
+        geom_vline(xintercept = vp, colour = "red") +
+        scale_fill_manual("", labels = c("ASIS", "JAGS"),
+                          values = c("black", "blue")) +
+        theme(legend.position = c(0.9, 0.75)) -> g
+    plot(g)
+
+    ggplot(tmp, aes(x = sigma2, fill = origem)) +
+        geom_density(alpha = 0.4) +
+        labs(x = "$\\sigma_\\eta^2$", y = "") +
+        geom_vline(xintercept = vs ** 2, colour = "red") +
+        scale_fill_manual("", labels = c("ASIS", "JAGS"),
+                          values = c("black", "blue")) +
+        theme(legend.position = c(0.9, 0.75))
+}
+
+## tabela
+tab_resumo <- function() {
+
+    "SELECT *
+     FROM resultados" %>%
+        dbGetQuery(link2, .) %>%
+        group_by(p, s, k) %>%
+        summarise(media_mu = mean(mu), inf_mu = quantile(mu, 0.025),
+                  mediana_mu = median(mu), sup_mu = quantile(mu, 0.975),
+                  media_phi = mean(phi), inf_phi = quantile(phi, 0.025),
+                  mediana_phi = median(phi), sup_phi = quantile(phi, 0.975),
+                  media_s = mean(sigma2), inf_s = quantile(sigma2, 0.025),
+                  mediana_s = median(sigma2),
+                  sup_s = quantile(sigma2, 0.975)) %>%
+        ungroup() %>%
+        arrange(desc(p), desc(s)) %>%
+        mutate_at(vars(contains("_")), funs(round(., 3))) %>%
+        mutate(s = s ** 2) -> tmp
+
+    for (i in 1:nrow(tmp)) {
+        cat("$\\mu$ & -5,4")
+        for (j in 4:15) {
+            if (j == 8) {
+                cat(" \\\\\n$\\phi$ &", as.numeric(tmp[i, 1]), "&",
+                    format(as.numeric(tmp[i, j]), decimal.mark = ",",
+                           nsmall = 3))
+            } else if (j == 12) {
+                cat(" \\\\\n$\\sigma_\\eta^2$ &", as.numeric(tmp[i, 2]), "&",
+                    format(as.numeric(tmp[i, j]), decimal.mark = ",",
+                           nsmall = 3))
+            } else {
+                cat(" &", format(as.numeric(tmp[i, j]), decimal.mark = ",",
+                                 nsmall = 3))
+            }
+        }
+        if (i != nrow(tmp) && i %% 3 == 0) {
+            cat(" \\\\\n\\hline\\hline\n")
+        } else {
+            cat(" \\\\\n\\hline\n")
+        }
+    }
+}
+@
+
+\chapter{Aplicação da Metodologia Proposta} \label{final}
+
+A proposta de estimação dos parâmetros do modelo de volatilidade estocástica foi testada inicialmente num conjunto de dados artificiais e, posteriormente, num conjunto de dados reais. Os relatos que seguem nesse capítulo mostram como o processo foi implementado e avaliado.
+
+\section{Definição dos Dados Simulados}
+
+Foram geradas algumas séries de dados com parâmetros conhecidos segundo o modelo canônico em \eqref{mvs:mvs}. As populações se caracterizam pelo produto cruzado dos possíveis valores predeterminados para $\mu$, $\phi$ e $\sigma_\eta^2$ a seguir:
+%
+\begin{itemize}
+  \item $\mu = -5,4$,
+  \item $\phi \in \{0,50; 0,80; 0,90; 0,99\}$,
+  \item $\sigma_\eta^2 \in \{0,1^2; 0,3^2; 0,5^2\}$.
+\end{itemize}
+%
+No caso de $\mu$, a opção de se trabalhar com um único valor fixado é devido ao conhecimento prévio de que tal parâmetro não apresenta maiores dificuldades técnicas em sua estimação, como cita \citep{stochvol}.
+
+A geração dos dados foi implementada em R \citep{r}. O Código \ref{mvs:sv_data} no apêndice \ref{chpt:sc} apresenta a função \verb=sv_data= que é responsável por gerar os dados simulados do modelo de volatilidade estocástica definido em \eqref{mvs:mvs}. Essa função possui quatro parâmetros: o tamanho da amostra desejada \verb=n=, o valor \verb=mu= do nível $\mu$, o valor \verb=phi= da persistência $\phi$ e o valor \verb=sigma= do desvio padrão $\sigma_\eta$. O resultado da função é um objeto do tipo \verb=data.frame=, que na verdade é um conjunto de dados com os valores simulados \verb=y= da variável observada $Y_t$ e \verb=h= da variável latente $h_t$.
+
+Foram gerados alguns conjuntos de dados para os 12 possíveis valores distintos de $\vetor{\psi} = (\mu, \phi, \sigma_\eta^2)$. Todas as populações tinham o mesmo tamanho de $\texttt{n} = 4 \times 365,25 = 1.461$ elementos, o que corresponde a quatro anos de observações diárias.
+
+A Figura \ref{mvs:fig_mvs_ex} mostra um exemplo de um conjunto de dados simulados com a persistência $\phi = 0,90$, e a volatilidade $\sigma_\eta^2 = 0,5^2$.
+%
+\begin{figure}[ht]
+\centering
+\begin{minipage}{0.8\linewidth}
+<<mvs-ex, include = TRUE, eval = TRUE, echo = FALSE, opts.label = "regular_fig">>=
+ggplot(dados_sim, aes(x = t, y = values, col = ind)) +
+    geom_line(size = 0.5) + labs(x = "$t$", y = "") +
+    scale_colour_manual("", labels = c("$y_t$", "$h_t$"),
+                        values = c("black", "red")) +
+    theme(legend.position = c(0.90, 0.75))
+@
+\caption{Conjunto de dados simulados a partir do modelo canônico em \eqref{mvs:mvs}, $\mu = -5,4$, $\phi = 0,90$ e $\sigma_\eta^2 = 0,5^2$.}
+\label{mvs:fig_mvs_ex}
+\end{minipage}
+\end{figure}
+
+\section{Estimação dos Parâmetros para os Dados Simulados}
+
+Inicialmente, a metodologia proposta também foi implementada em R. Porém, devido ao processo ser extremamente demorado, o projeto final foi totalmente programado em C \citep{c}. O Código \ref{code:mvs} no apêndice \ref{chpt:sc} mostra o código-fonte da implementação do algoritmo de estimação dos parâmetros.
+
+Nessa e em todas as demais execuções do algoritmo, foram tomadas 15.000 iterações, sendo as 5.000 iniciais descartadas (\textit{burn-in}), além de 9 a cada 10 iterações consecutivas (\textit{thin}). O resultado, portanto, foi sempre uma amostra de 1.000 observações ``válidas''. A escolha desses valores foi baseada em \cite{achcar}. As distribuições \textit{a priori} de $\mu$, $\phi$ e $\sigma_\eta^2$ são definadas como sugere \cite{kim} e \cite{kastner}:
+%
+\begin{align}
+  \mu &\sim \dnormal{0}{100}{}, \notag \\
+  \phi_0 &\sim \dbetaxt{20}{\frac{3}{2}}{}, \label{res:priori_mu} \\
+  \sigma_\eta^2 &\sim \dgammaxt{\frac{1}{2}}{\frac{1}{2}}{}. \notag
+\end{align}
+%
+O que chama atenção é a distribuição \textit{a priori} de $\phi$, que é bastante informativa. \cite{kim} justifica isso no fato de que uma \textit{priori} não informativa gera problemas quando a série de dados está próxima da não estacionariedade.
+
+O primeiro passo foi avaliar a performance do processo de estimação da variável latente, $h_t$, conhecidos os valores reais dos parâmetros $\mu$, $\phi$ e $\sigma_\eta^2$. Para isso, os valores reais de $h_t$ foram comparados através de gráficos com os valores médios dos 1.000 valores estimados de $\hat{h}_t$:
+%
+\begin{equation}
+  \bar{\hat{h}}_t = \frac{\soma{j = 1}{1000}\hat{h}_{t, j}}{1000}. \label{est:hmedio}
+\end{equation}
+%
+O intervalo dos possíveis valores do fator de desconto, $\lambda_t$, foi limitado ao intervalo (0,75; 1). Tal intervalo foi definido pois, em estudos preliminares, foi constatado uma tendência de obtenção de valores de $\lambda_t$ bem baixos, o que aumenta o ruído nas estimativas. O valor inicial, $h_0$, foi tomado aleatoriamente de sua respectiva distribuição inicial conforme o modelo \eqref{mvs:mvs}.
+%
+\begin{figure}[ht]
+\centering
+\begin{minipage}{0.8\linewidth}
+<<mvs-res-1, include = TRUE, eval = TRUE, echo = FALSE, opts.label = "regular_fig">>=
+comp_h(1)
+@
+\caption{Valores médios estimados de $h_t$ do modelo \eqref{mvs:mvs} quando os parâmetros $\mu$, $\phi$ e $\sigma_\eta^2$ são conhecidos ($\mu = -5,4$, $\phi = 0,90$ e $\sigma_\eta^2 = 0,5^2$).}
+\label{res:fig_1}
+\end{minipage}
+\end{figure}
+
+A Figura \ref{res:fig_1} mostra os perfis da série real de $h_t$ e de sua estimativa $\bar{\hat{h}}_t$. Como a própria visualização das séries sugere, os valores médios estimados, $\bar{\hat{h}}_t$, convergem de forma aceitável aos valores reais, $h_t$. E a aplicação da metodologia inspirada em \cite{mccormick} proporcionou resultados bastante satisfatórios para esse conjunto de dados. O intervalo de credibilidade de 95\% foi calculado, e omitido do gráfico intencionalmente por uma questão estética, pois sua amplitude média foi inferior a 0,001, corroborando mais uma vez com a avaliação positiva sobre a aplicabilidade da técnica.
+
+Todavia, vale destacar que o processo se deu com os valores reais de $\mu$, $\phi$ e $\sigma_\eta^2$. A próxima etapa então é agregar o algoritmo de estimação de $h_t$ via \cite{mccormick} com a estratégia proposta em \cite{kastner}.
+
+A primeira execução resultou num erro inesperado já de início. A variância de $(h_t | D_t)$ definida em \eqref{est:variC} vai diminuindo a cada iteração, até chegar num valor computacionalmente igual a zero. Assim, as estimativas de $h_t$ são todas nulas.
+
+Num processo de tentativa e erro, foi constatado que o parâmetro $\phi$ é extremamente dominante no algoritmo proposto para se estimar a variável latente $h_t$ inspirado em \cite{mccormick}. A Figura \ref{res:fig_2} mostra o resultado da estimação da variável latente quando todos os parâmetros são desconhecidos, exceto $\phi$. Claramente é difícil perceber, a olho nú, a diferença na série de valores estimados de $h_t$ do procedimento quando todos os parâmetros são conhecidos (Figura \ref{res:fig_1}) e apenas a persistência $\phi$ é conhecida (Figura \ref{res:fig_2}).
+%
+\begin{figure}[ht]
+\centering
+\begin{minipage}{0.8\linewidth}
+<<mvs-res-2, include = TRUE, eval = TRUE, echo = FALSE, opts.label = "regular_fig">>=
+comp_h(2)
+@
+\caption{Valores médios estimados de $h_t$ do modelo \eqref{mvs:mvs} quando apenas o parâmetro $\phi$ é conhecido ($\mu = -5,4$, $\phi = 0,90$ e $\sigma_\eta^2 = 0,5^2$).}
+\label{res:fig_2}
+\end{minipage}
+\end{figure}
+
+A primeira alternativa de estimar todos os parâmetros estáticos, inclusive $\phi$, baseada no trabalho de \cite{kastner} (no entanto, outros autores também a adotam), foi de tomar todos os parâmetros desconhecidos, porém partir do valor inicial de $\phi$ igual ao verdadeiro valor deste parâmetro. Curiosamente, o processo volta a funcionar de forma satisfatória, conforme é mostrado na Figura \ref{res:fig_3}, o que prova, mais uma vez, a extrema importância de $\phi$ nessa metodologia.
+%
+\begin{figure}[ht]
+\centering
+\begin{minipage}{0.8\linewidth}
+<<mvs-res-3, include = TRUE, eval = TRUE, echo = FALSE, opts.label = "regular_fig">>=
+comp_h(3)
+@
+\caption{Valores médios estimados de $h_t$ do modelo \eqref{mvs:mvs} quando o valor inicial de $\phi$ é igual ao valor verdadeiro do parâmetro ($\mu = -5,4$, $\phi = 0,90$ e $\sigma_\eta^2 = 0,5^2$).}
+\label{res:fig_3}
+\end{minipage}
+\end{figure}
+
+Uma vez que iniciar o algoritmo a partir dos valores reais (mesmo que de uma variável somente) não é uma condição desejável, o plano então foi o de tentar resolver esse problema da estimação de $\phi$ de outra maneira.
+
+O termo em \eqref{est:mccormick_4},
+%
+\begin{equation}
+  R_t = \frac{\phi^2 \hat{C}_{t-1}}{\lambda_t},
+\end{equation}
+%
+presente nas derivadas \eqref{est:d1} e \eqref{est:d2} que surgem no algoritmo para estimar a variável latente $h_t$, é quem está fazendo com que a variância do candidato à observação \textit{a posteriori} de $h_t$ fique próxima de zero. Como $\phi$ é um parâmetro do MVE e $\hat{C}_{t-1}$ é um valor a ser estimado ao longo das iterações, o único termo que sobra para ``contrabalancear'' os baixos valores gerados de $R_t$ é o fator $\lambda_t$.
+
+Como citado anteriormente, os valores do fator de desconto, $\lambda_t$, foram limitados ao intervalo (0,75; 1), devido a constatação inicial de uma tendência de polarização dos valores de $\lambda_t$, especialmente no limite inferior do intervalo. Desse modo, numa nova tentativa, esse intervalo limitante foi deixado de lado e o valor do fator de desconto foi fixado em $\lambda_t = 0,50$.
+
+A Figura \ref{res:fig_4} mostra os valores médios de $\hat{h}_t$ obtidos no processo de estimação considerando $\lambda_t = 0,50$ e $\phi$ estimado a partir de um valor inicial diferente do valor real. Observa-se que a série estimada de $\hat{h}_t$ apresenta valores que subestimam o valores reais da variável latente, $h_t$, e apresenta incerteza maior do que os casos analisados em que o valor verdadeiro de $\phi$ foi fixado.
+%
+\begin{figure}[ht]
+\centering
+\begin{minipage}{0.8\linewidth}
+<<mvs-res-4, include = TRUE, eval = TRUE, echo = FALSE, opts.label = "regular_fig">>=
+comp_h(4)
+@
+\caption{Valores médios estimados de $h_t$ do modelo \eqref{mvs:mvs} quando $\lambda_t = 0,50$ ($\mu = -5,4$, $\phi = 0,90$ e $\sigma_\eta^2 = 0,5^2$).}
+\label{res:fig_4}
+\end{minipage}
+\end{figure}
+
+Desse modo, os parâmetros do modelo de volatilidade estocástica foram estimados para o conjunto de populações simuladas fixando-se o valor de $\lambda_t$ próximo do máximo valor possível, em cada caso. Os resultado podem ser vistos na Tabela \ref{tab:resultados_asis} e nas Figuras \ref{res:fig_5} a \ref{res:fig_16}, a seguir.
+
+A Tabela \ref{tab:resultados_asis} mostra o valor real do parâmetro, a média, o quantil de 2,5\%, a mediana e o quantil de 95\% dos valores estimados de cada um dos três parâmetros $\mu$, $\phi$ e $\sigma_\eta^2$ do modelo de volatilidade estocástica obtidos através da estimativa proposta nesta dissertação. Já as Figuras \ref{res:fig_5} a \ref{res:fig_16} mostram respectivamente a série de valores ``válidos'' sequencialmente obtidos e o histograma representando a distribuição empírica, também dos parâmetros $\mu$, $\phi$ e $\sigma_\eta^2$ do modelo.
+
+O que é possível aprender pela Tabela \ref{tab:resultados_asis} e pelas Figuras \ref{res:fig_5} a \ref{res:fig_16} é que os valores do parâmetro $\mu$ são bem estimados em todas as circunstâncias. Os valores médios apresentam pouquíssimo viés, independente do valor verdadeiro dos parâmetros do conjunto de dados simulados, e o intervalo de disperssão é praticamente o mesmo, exceto quando a persistência $\phi = 0,99$ e $\sigma_\eta^2 = 0,25$. Os valores estimados de $\sigma_\eta^2$ apresentam valores aceitáveis quando o verdadeiro valor deste parâmetro não é muito pequeno ($< 0,09$). Já o parâmetro $\phi$ parece preso num poço de potencial. Indepentente do seu valor verdadeiro, são amostrados valores altíssimos da persistência. Na tentativa de investigar o porquê desses valores discrepantes estimados para o parâmetro $\phi$, foram feitas novas escolhas de distribuições \textit{a priori} para $\phi$. Porém, essa situação insistiu em persistir.
+
+Um outro ponto a ser notado é que a escolha inicial de executar o algoritmo com 15.000 iterações (sendo as 5.000 iniciais descartadas) baseada em \cite{achcar} se provou adequada. As séries geradas de valores sequenciais dos parâmetros nas Figuras \ref{res:fig_5} a \ref{res:fig_16} mostram que, em todos os casos, os parâmetros $\mu$, $\phi$ e $\sigma_\eta^2$ estão estáveis em torno de um ponto fixo.
+
+O modelo canônico em \eqref{mvs:mvs} será implementado e estimado também via JAGS na próxima seção, para efeitos de comparação com a técnica proposta nesta dissertação.
+
+\newpage
+\begin{table}[ht]
+  \centering
+  \caption{Estatísticas dos valores estimados dos parâmetros.}
+  \scalebox{0.92}{
+  \begin{tabular}{c|r|rrrr}
+    \hline
+    Parâmetro & Real & Média & 2,5\% & Mediana & 97,5\% \\
+    \hline
+<<tabela_resumo, include = TRUE, echo = FALSE, results = "asis">>=
+tab_resumo()
+@
+  \end{tabular}}
+  \label{tab:resultados_asis}
+\end{table}
+
+\newpage
+\subsubsection*{Valores reais: $\mu = -5,4$, $\phi = 0,99$ e $\sigma_\eta^2 = 0,5^2$}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.8\linewidth}
+<<mvs-res-5, include = TRUE, eval = TRUE, echo = FALSE, opts.label = "triple_fig">>=
+g_result(0.99, 0.5, 1)
+@
+\caption{Valores estimados ($\mu = -5,4$, $\phi = 0,99$ e $\sigma_\eta^2 = 0,5^2$).}
+\label{res:fig_5}
+\end{minipage}
+\end{figure}
+
+\newpage
+\subsubsection*{Valores reais: $\mu = -5,4$, $\phi = 0,99$ e $\sigma_\eta^2 = 0,3^2$}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.8\linewidth}
+<<mvs-res-6, include = TRUE, eval = TRUE, echo = FALSE, opts.label = "triple_fig">>=
+g_result(0.99, 0.3, 1)
+@
+\caption{Valores estimados ($\mu = -5,4$, $\phi = 0,99$ e $\sigma_\eta^2 = 0,3^2$).}
+\label{res:fig_6}
+\end{minipage}
+\end{figure}
+
+\newpage
+\subsubsection*{Valores reais: $\mu = -5,4$, $\phi = 0,99$ e $\sigma_\eta^2 = 0,1^2$}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.8\linewidth}
+<<mvs-res-7, include = TRUE, eval = TRUE, echo = FALSE, opts.label = "triple_fig">>=
+g_result(0.99, 0.1, 11)
+@
+\caption{Valores estimados ($\mu = -5,4$, $\phi = 0,99$ e $\sigma_\eta^2 = 0,1^2$).}
+\label{res:fig_7}
+\end{minipage}
+\end{figure}
+
+\newpage
+\subsubsection*{Valores reais: $\mu = -5,4$, $\phi = 0,90$ e $\sigma_\eta^2 = 0,5^2$}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.8\linewidth}
+<<mvs-res-8, include = TRUE, eval = TRUE, echo = FALSE, opts.label = "triple_fig", warning = FALSE>>=
+g_result(0.9, 0.5, 1)
+@
+\caption{Valores estimados ($\mu = -5,4$, $\phi = 0,90$ e $\sigma_\eta^2 = 0,5^2$).}
+\label{res:fig_8}
+\end{minipage}
+\end{figure}
+
+\newpage
+\subsubsection*{Valores reais: $\mu = -5,4$, $\phi = 0,90$ e $\sigma_\eta^2 = 0,3^2$}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.8\linewidth}
+<<mvs-res-9, include = TRUE, eval = TRUE, echo = FALSE, opts.label = "triple_fig", warning = FALSE>>=
+g_result(0.9, 0.3, 1)
+@
+\caption{Valores estimados ($\mu = -5,4$, $\phi = 0,90$ e $\sigma_\eta^2 = 0,3^2$).}
+\label{res:fig_9}
+\end{minipage}
+\end{figure}
+
+\newpage
+\subsubsection*{Valores reais: $\mu = -5,4$, $\phi = 0,90$ e $\sigma_\eta^2 = 0,1^2$}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.8\linewidth}
+<<mvs-res-10, include = TRUE, eval = TRUE, echo = FALSE, opts.label = "triple_fig", warning = FALSE>>=
+g_result(0.9, 0.1, 1)
+@
+\caption{Valores estimados ($\mu = -5,4$, $\phi = 0,90$ e $\sigma_\eta^2 = 0,1^2$).}
+\label{res:fig_10}
+\end{minipage}
+\end{figure}
+
+\newpage
+\subsubsection*{Valores reais: $\mu = -5,4$, $\phi = 0,80$ e $\sigma_\eta^2 = 0,5^2$}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.8\linewidth}
+<<mvs-res-11, include = TRUE, eval = TRUE, echo = FALSE, opts.label = "triple_fig", warning = FALSE>>=
+g_result(0.8, 0.5, 6)
+@
+\caption{Valores estimados ($\mu = -5,4$, $\phi = 0,80$ e $\sigma_\eta^2 = 0,5^2$).}
+\label{res:fig_11}
+\end{minipage}
+\end{figure}
+
+\newpage
+\subsubsection*{Valores reais: $\mu = -5,4$, $\phi = 0,80$ e $\sigma_\eta^2 = 0,3^2$}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.8\linewidth}
+<<mvs-res-12, include = TRUE, eval = TRUE, echo = FALSE, opts.label = "triple_fig", warning = FALSE>>=
+g_result(0.8, 0.3, 5)
+@
+\caption{Valores estimados ($\mu = -5,4$, $\phi = 0,80$ e $\sigma_\eta^2 = 0,3^2$).}
+\label{res:fig_12}
+\end{minipage}
+\end{figure}
+
+\newpage
+\subsubsection*{Valores reais: $\mu = -5,4$, $\phi = 0,80$ e $\sigma_\eta^2 = 0,1^2$}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.8\linewidth}
+<<mvs-res-13, include = TRUE, eval = TRUE, echo = FALSE, opts.label = "triple_fig", warning = FALSE>>=
+g_result(0.8, 0.1, 5)
+@
+\caption{Valores estimados ($\mu = -5,4$, $\phi = 0,80$ e $\sigma_\eta^2 = 0,1^2$).}
+\label{res:fig_13}
+\end{minipage}
+\end{figure}
+
+\newpage
+\subsubsection*{Valores reais: $\mu = -5,4$, $\phi = 0,50$ e $\sigma_\eta^2 = 0,5^2$}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.8\linewidth}
+<<mvs-res-14, include = TRUE, eval = TRUE, echo = FALSE, opts.label = "triple_fig", warning = FALSE>>=
+g_result(0.5, 0.5, 1)
+@
+\caption{Valores estimados ($\mu = -5,4$, $\phi = 0,50$ e $\sigma_\eta^2 = 0,5^2$).}
+\label{res:fig_14}
+\end{minipage}
+\end{figure}
+
+\newpage
+\subsubsection*{Valores reais: $\mu = -5,4$, $\phi = 0,50$ e $\sigma_\eta^2 = 0,3^2$}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.8\linewidth}
+<<mvs-res-15, include = TRUE, eval = TRUE, echo = FALSE, opts.label = "triple_fig", warning = FALSE>>=
+g_result(0.5, 0.3, 1)
+@
+\caption{Valores estimados ($\mu = -5,4$, $\phi = 0,50$ e $\sigma_\eta^2 = 0,3^2$).}
+\label{res:fig_15}
+\end{minipage}
+\end{figure}
+
+\newpage
+\subsubsection*{Valores reais: $\mu = -5,4$, $\phi = 0,50$ e $\sigma_\eta^2 = 0,1^2$}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.8\linewidth}
+<<mvs-res-16, include = TRUE, eval = TRUE, echo = FALSE, opts.label = "triple_fig", warning = FALSE>>=
+g_result(0.5, 0.1, 1)
+@
+\caption{Valores estimados ($\mu = -5,4$, $\phi = 0,50$ e $\sigma_\eta^2 = 0,1^2$).}
+\label{res:fig_16}
+\end{minipage}
+\end{figure}
+
+\newpage
+\section{Comparação dos Resultados Obtidos com o JAGS}
+
+A estimação dos parâmetros do modelo de volatilidade estocástica será feita nessa etapa a partir do amostrador de Gibbs implementado no \textit{software} JAGS, \cite{jags}. JAGS é um acrônimo para a expressão em inglês \textit{\textbf{J}ust \textbf{A}nother \textbf{G}ibbs \textbf{S}ampler}, e sua escolha foi motivada por dois fatores.
+
+O primeiro motivo da escolha do JAGS se deve ao desenvolvimento e manutenção do programa. Enquanto a solução mais tradicional, WinBUGS \citep{winbugs}, foi descontinuada em 2007, o desenvolvimento do JAGS permanece ativo. Assim, a princípio, é um programa menos suscetível a \textit{bugs} e em constante aprimoramento. O segundo motivo é devido a ótima integração com o R, através do pacote \verb=R2jags= \citep{R2jags-package}.
+
+O JAGS, apesar de integrado ao R, possui uma linguagem própria, descrita em \cite{jags-manual}. As variáveis do modelo estudado devem ser declaradas segundo a sua natureza (determinística ou estocástica). Sua sintaxe é muito parecida com R. Contudo, deve-se tomar cuidado quanto à implementação das distribuições. A normal, por exemplo, foi programada a partir de sua precisão ($\tau = \sigma^{-2}$).
+
+O código-fonte do modelo canônico de volatilidade estocástica \eqref{mvs:mvs} em JAGS está no Código \ref{mvs:jags_model} do apêndice \ref{chpt:sc}. As distribuições de $Y_t$ e $h_t$, que são a base dessa implementação são:
+%
+\begin{align}
+  Y_t &\sim \dnormalxt{0}{e^{h_t}}{} \text{ e } \label{mvs:dist_jags_y} \\
+  \pxt{h_t | h_{t - 1}} &\sim \dnormalxt{\mu + \phi (h_{t-1} - \mu)}{\sigma_\eta^2}{}. \label{mvs:dist_jags_h}
+\end{align}
+
+Apesar das facilidades computacionais, especialmente pela simplicidade de se implementar modelos bastante complexos, que o JAGS proporciona, os problemas de estimação dos parâmetros do modelo de volatilidade estocástica persistem e são bem similares com aqueles encontrados através da técnica proposta nessa dissertação.
+
+O procedimento foi exatamente o mesmo feito anteriormento, isto é, o modelo foi calibrado através de um \textit{burn-in} igual a 5.000. Então, mais 10.000 iterações foram executadas, e uma a cada 10 observações foi salva. Resultando, assim, numa amostra \textit{a posteriori} de tamanho 1.000 para cada um dos três parâmetros em cada população. As distribuições \textit{a priori} foram idênticas àquelas já descritas em \eqref{res:priori_mu}.
+
+As Figuras \ref{res:fig_jags_1} a \ref{res:fig_jags_12}, a seguir, mostram a comparação entre as estimativas do JAGS e as estimativas feitas pelo método proposto nessa dissertação. São apresentadas as densidades empíricas dos valores estimados dos parâmetros $\mu$, $\phi$ e $\sigma_\eta^2$ através dos dois métodos.
+
+Da mesma maneira que na metodologia proposta através da composição do método ASIS \citep{kastner} com o método de estimação da variável latente, $h_t$, via \citep{mccormick}, a estimação através do JAGS gerou boas estimativas para $\mu$ em todos os casos. Para o parâmetro $\sigma_\eta^2$, semelhante ao método anterior, nem sempre obteve-se boas estimativa. A medida que o valor real da persistência $\phi$ decresce, o JAGS tende a subestimar os valores de $\sigma_\eta^2$. E por fim, para o parâmetro $\phi$, que apresentou a pior performance pelo método proposto nesta dissertação, obteve-se uma discreta melhora via JAGS. Muito embora esse aprimoramento não deva ser considerado excelente. Nota-se que, mesmo utilizando o JAGS, as estimativas do parâmetro $\phi$ tiveram uma dispersão bem alta, e as vezes, até mesmo, apresentaram-se bastante viesadas. Sugerindo assim, mais uma vez, que o parâmetro da persistência $\phi$ seja o ``calcanhar de Aquiles'' do modelo de volatilidade estocástica.
+
+A próxima, e última, seção desse capítulo apresenta uma aplicação com dados reais da metodologia resultante da composição da estratégia ASIS \citep{kastner} com a técnica adaptada de \cite{mccormick} para estimação da variável latente $h_t$. Os resultados obtidos também são comparados com as estimativas geradas através do JAGS.
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.8\linewidth}
+<<mvs-jags-1, include = TRUE, eval = TRUE, echo = FALSE, opts.label = "single_fig", warning = FALSE>>=
+comp_jags(0.99, 0.5, 1)
+@
+\caption{Valores estimados via JAGS vs método proposto ($\mu = -5,4$, $\phi = 0,99$ e $\sigma_\eta^2 = 0,5^2$).}
+\label{res:fig_jags_1}
+\end{minipage}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.8\linewidth}
+<<mvs-jags-2, include = TRUE, eval = TRUE, echo = FALSE, opts.label = "single_fig", warning = FALSE>>=
+comp_jags(0.99, 0.3, 1)
+@
+\caption{Valores estimados via JAGS vs método proposto ($\mu = -5,4$, $\phi = 0,99$ e $\sigma_\eta^2 = 0,3^2$).}
+\label{res:fig_jags_2}
+\end{minipage}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.8\linewidth}
+<<mvs-jags-3, include = TRUE, eval = TRUE, echo = FALSE, opts.label = "single_fig", warning = FALSE>>=
+comp_jags(0.99, 0.1, 11)
+@
+\caption{Valores estimados via JAGS vs método proposto ($\mu = -5,4$, $\phi = 0,99$ e $\sigma_\eta^2 = 0,1^2$).}
+\label{res:fig_jags_3}
+\end{minipage}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.8\linewidth}
+<<mvs-jags-4, include = TRUE, eval = TRUE, echo = FALSE, opts.label = "single_fig", warning = FALSE>>=
+comp_jags(0.9, 0.5, 1)
+@
+\caption{Valores estimados via JAGS vs método proposto ($\mu = -5,4$, $\phi = 0,90$ e $\sigma_\eta^2 = 0,5^2$).}
+\label{res:fig_jags_4}
+\end{minipage}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.8\linewidth}
+<<mvs-jags-5, include = TRUE, eval = TRUE, echo = FALSE, opts.label = "single_fig", warning = FALSE>>=
+comp_jags(0.9, 0.3, 1)
+@
+\caption{Valores estimados via JAGS vs método proposto ($\mu = -5,4$, $\phi = 0,90$ e $\sigma_\eta^2 = 0,3^2$).}
+\label{res:fig_jags_5}
+\end{minipage}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.8\linewidth}
+<<mvs-jags-6, include = TRUE, eval = TRUE, echo = FALSE, opts.label = "single_fig", warning = FALSE>>=
+comp_jags(0.9, 0.1, 1)
+@
+\caption{Valores estimados via JAGS vs método proposto ($\mu = -5,4$, $\phi = 0,90$ e $\sigma_\eta^2 = 0,1^2$).}
+\label{res:fig_jags_6}
+\end{minipage}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.8\linewidth}
+<<mvs-jags-7, include = TRUE, eval = TRUE, echo = FALSE, opts.label = "single_fig", warning = FALSE>>=
+comp_jags(0.8, 0.5, 6)
+@
+\caption{Valores estimados via JAGS vs método proposto ($\mu = -5,4$, $\phi = 0,80$ e $\sigma_\eta^2 = 0,5^2$).}
+\label{res:fig_jags_7}
+\end{minipage}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.8\linewidth}
+<<mvs-jags-8, include = TRUE, eval = TRUE, echo = FALSE, opts.label = "single_fig", warning = FALSE>>=
+comp_jags(0.8, 0.3, 5)
+@
+\caption{Valores estimados via JAGS vs método proposto ($\mu = -5,4$, $\phi = 0,80$ e $\sigma_\eta^2 = 0,3^2$).}
+\label{res:fig_jags_8}
+\end{minipage}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.8\linewidth}
+<<mvs-jags-9, include = TRUE, eval = TRUE, echo = FALSE, opts.label = "single_fig", warning = FALSE>>=
+comp_jags(0.8, 0.1, 5)
+@
+\caption{Valores estimados via JAGS vs método proposto ($\mu = -5,4$, $\phi = 0,80$ e $\sigma_\eta^2 = 0,1^2$).}
+\label{res:fig_jags_9}
+\end{minipage}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.8\linewidth}
+<<mvs-jags-10, include = TRUE, eval = TRUE, echo = FALSE, opts.label = "single_fig", warning = FALSE>>=
+comp_jags(0.5, 0.5, 1)
+@
+\caption{Valores estimados via JAGS vs método proposto ($\mu = -5,4$, $\phi = 0,50$ e $\sigma_\eta^2 = 0,5^2$).}
+\label{res:fig_jags_10}
+\end{minipage}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.8\linewidth}
+<<mvs-jags-11, include = TRUE, eval = TRUE, echo = FALSE, opts.label = "single_fig", warning = FALSE>>=
+comp_jags(0.5, 0.3, 1)
+@
+\caption{Valores estimados via JAGS vs método proposto ($\mu = -5,4$, $\phi = 0,50$ e $\sigma_\eta^2 = 0,3^2$).}
+\label{res:fig_jags_11}
+\end{minipage}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.8\linewidth}
+<<mvs-jags-12, include = TRUE, eval = TRUE, echo = FALSE, opts.label = "single_fig", warning = FALSE>>=
+comp_jags(0.5, 0.1, 1)
+@
+\caption{Valores estimados via JAGS vs método proposto ($\mu = -5,4$, $\phi = 0,5$ e $\sigma_\eta^2 = 0,1^2$).}
+\label{res:fig_jags_12}
+\end{minipage}
+\end{figure}
+
+<<closeconnection, include = FALSE>>=
+dbDisconnect(link)
+dbDisconnect(link2)
+@ 
+
+\section{Um Exemplo com Dados Reais}
+
+\cite{achcar} propõe dois modelos de volatilidade estocástica levemente diferentes do modelo canônico em \eqref{mvs:mvs} para estudar a concentração de ozônio na Cidade do México. A base de dados utilizada no artigo corresponde a 16 anos (1$^\circ$ de janeiro 1990 a 31 de dezembro 2005) de medições da média semanal do nível diário máximo de ozônio em cinco regiões (NW, NE, CE, SE e SW) da Cidade do México. Os dados foram obtidos atráves do site \href{http://www.aire.df.gob.mx/}{http://www.aire.df.gob.mx/}.
+
+Os modelos propostos pelos autores são multivariados, pois levam em consideração a evolução das séries temporais da concentração de ozônio nas cinco regiões conjuntamente, sendo que, inclusive, um dos modelos apresentados propõe um parâmetro de volatilidade comum a todas as regiões, que adiciona-se à volatilidade individual de cada um dos setores. Por essa mesma razão não é prudente seguir com uma comparação direta dos resultados publicados em \cite{achcar} com os resultados obtidos nesta dissertação em que nas análises condiderou-se as séries temporais de forma univariada. Entretando, o artigo citado foi muito importante para o entendimento inicial do modelo de volatilidade estocástica, e a base de dados referida foi utilizada nesta etapa como exemplo prático de aplicação da técnica.
+
+O algoritmo foi executado nos dados da região CE (pois as séries das demais regiões continham dados perdidos) e os resultados pode ser vistos a seguir.
+
+Como era esperado, o parâmetro de persistência $\phi$, no método proposto, ficou preso em torno dos valores acima de 0,9. E no caso do JAGS a estimativa ficou em torno de 0,8 (que é próximo da média \textit{a priori} - 0,86), mas com uma dispersão bastante alta. Foram testadas outras distribuições \textit{a priori} de $\phi$ e foi constatado que os valores gerados deste parâmetro através do JAGS são totalmente determinados por sua distribuição \textit{a priori}. As estimativas do parâmetro da variância da volatilidade $\sigma_\eta^2$ foram bem próximas para os dois métodos, como também era esperado. Porém, não obteve-se concordância entre as estimativas de $\mu$ via JAGS e via o método proposto. Muito provavelmente, diferente dos dados simulados, essa série corresponde a dados reais que foram gerados por um processo natural, absolutamente desconhecido.
+
+\newpage
+\subsubsection*{Região CE}
+
+<<base-jags, include = FALSE>>=
+tmp <- readr::read_tsv("../../dados/o3_c", col_names = FALSE)
+@
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.8\linewidth}
+<<mvs-o3, include = TRUE, eval = TRUE, echo = FALSE, opts.label = "triple_fig", warning = FALSE>>=
+## mu
+ggplot(tmp, aes(x = 1:1000, y = X1)) +
+    geom_line(size = 0.5) +
+    labs(x = "$t$", y = "$\\mu$")
+
+ggplot(tmp, aes(x = X1, y = ..density..)) +
+    geom_histogram(binwidth = 0.4) +
+    labs(x = "$\\mu$", y = "")
+
+## phi
+ggplot(tmp, aes(x = 1:1000, y = X2)) +
+    geom_line(size = 0.5) +
+    labs(x = "$t$", y = "$\\phi$")
+
+ggplot(tmp, aes(x = X2, y = ..density..)) +
+    geom_histogram(binwidth = 0.001) +
+    labs(x = "$\\phi$", y = "")
+
+## sigma
+ggplot(tmp, aes(x = 1:1000, y = X3)) +
+    geom_line(size = 0.5) +
+    labs(x = "$t$", y = "$\\sigma_\\eta^2$")
+
+ggplot(tmp, aes(x = X3, y = ..density..)) +
+    geom_histogram(binwidth = 0.025) +
+    labs(x = "$\\sigma_\\eta^2$", y = "")
+@
+\caption{Valores estimados do MVE aplicado aos dados reais.}
+\label{res:o3}
+\end{minipage}
+\end{figure}
+
+A Tabela \ref{tab:o3} mostra algumas estatísticas dos valores estimados dos parâmetros e a Figuras \ref{res:o3} apresenta a comparação dos resultados obtidos também com o JAGS.
+
+\begin{table}[ht]
+  \centering
+  \caption{Estatísticas dos valores estimados dos parâmetros do MVE aplicado aos dados reais.}
+  \scalebox{1}{
+  \begin{tabular}{c|rrrr}
+    \hline
+    Parâmetro & Média & 2,5\% & Mediana & 97,5\% \\
+    \hline
+<<tabela_jags, include = TRUE, echo = FALSE, results = "asis">>=
+tmp %>%
+    summarise(media_mu = mean(X1), inf_mu = quantile(X1, 0.025),
+              mediana_mu = median(X1), sup_mu = quantile(X1, 0.975),
+              media_phi = mean(X2), inf_phi = quantile(X2, 0.025),
+              mediana_phi = median(X2), sup_phi = quantile(X2, 0.975),
+              media_s = mean(X3), inf_s = quantile(X3, 0.025),
+              mediana_s = median(X3), sup_s = quantile(X3, 0.975)) %>%
+    mutate_all(funs(round(., 3))) -> tab_tmp
+
+cat("$\\mu$")
+for (i in 1:12) {
+    if (i == 5) {
+        cat(" \\\\\n$\\phi$ &", format(as.numeric(tab_tmp[1, i]),
+                                     decimal.mark = ",", nsmall = 3))
+    } else if (i == 9) {
+        cat(" \\\\\n$\\sigma_\\eta^2$ &", format(as.numeric(tab_tmp[1, i]),
+                                     decimal.mark = ",", nsmall = 3))
+    } else {
+        cat(" &", format(as.numeric(tab_tmp[1, i]),
+                         decimal.mark = ",", nsmall = 3))
+    }
+}
+cat(" \\\\")
+@
+    \hline
+   \end{tabular}}
+   \label{tab:o3}
+\end{table}
+
+<<base-jags2, include = FALSE>>=
+tmp <- bind_rows(tmp, readr::read_tsv("../../dados/o3_jags",
+                                      col_names = FALSE)) %>%
+    mutate(origem = rep(c("ASIS", "JAGS"), each = 1000))
+@
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.8\linewidth}
+<<mvs-jags-o3, include = TRUE, eval = TRUE, echo = FALSE, opts.label = "single_fig", warning = FALSE>>=
+## mu
+ggplot(tmp, aes(x = X1, fill = origem)) +
+    geom_density(alpha = 0.4) +
+    labs(x = "$\\mu$", y = "") +
+    scale_fill_manual("", labels = c("ASIS", "JAGS"),
+                      values = c("black", "blue")) +
+    theme(legend.position = c(0.1, 0.75))
+
+## phi
+ggplot(tmp, aes(x = X2, fill = origem)) +
+    geom_density(alpha = 0.4) +
+    labs(x = "$\\phi$", y = "") +
+    scale_fill_manual("", labels = c("ASIS", "JAGS"),
+                      values = c("black", "blue")) +
+    theme(legend.position = c(0.1, 0.75))
+
+## sigma
+ggplot(tmp, aes(x = X3, fill = origem)) +
+    geom_density(alpha = 0.4) +
+    labs(x = "$\\sigma_\\eta^2$", y = "") +
+    scale_fill_manual("", labels = c("ASIS", "JAGS"),
+                      values = c("black", "blue")) +
+    theme(legend.position = c(0.9, 0.75))
+@
+\caption{Valores estimados via JAGS vs método proposto aplicados aos dados reais.}
+\label{res:fig_jags_o3}
+\end{minipage}
+\end{figure}
