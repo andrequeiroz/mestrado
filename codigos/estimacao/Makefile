@@ -1,9 +1,9 @@
 CFLAGS=-std=c99 -Wall
 LIBS=-lsqlite3 -lm -lgsl -lgslcblas
 
-all: o3
+all: estimacao
 
-o3: o3.c 
+estimacao: estimacao.c 
 	gcc $< -o $@ $(CFLAGS) $(LIBS)
 
 clean:

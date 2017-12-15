@@ -30,21 +30,33 @@ int main(void) {
 
   unsigned long int t = time(NULL);
 
-  int n = 1461;
+  int base = 0, n;
+  char query[35], caminho[35];
+
+  do {
+    printf("base [1] svsim, [2] o3: ");
+    scanf("%d", &base);
+  } while (base != 1 && base != 2);
+
+  if (base == 1) {
+    n = 1461;
+    strcpy(query, "SELECT y FROM p08s05 WHERE k = 1");
+    strcpy(caminho, "../../dados/svsim2.db");
+  } else {
+    n = 834;
+    strcpy(query, "SELECT CE AS y FROM achcar2011");
+    strcpy(caminho, "../../dados/o3.db");
+  }
+
   sqlite3 *db;
   sqlite3_stmt *stmt;
-  char query[35] = "SELECT y FROM p08s05 WHERE k = 1";
   FILE *f = fopen("/tmp/resultado", "w");
   FILE *f_h = fopen("/tmp/resultado_h", "w");
 
   double *y;
   y = malloc(n * sizeof (double));
 
-  sqlite3_open("../../dados/svsim2.db", &db);
-
-  // printf("Tabela pXXsXX: ");
-  // scanf("%s", tabela);
-  // strcat(query, tabela);
+  sqlite3_open(caminho, &db);
 
   /* compila a query em bytecode. o terceiro argumento é o tamanho da query,
      a performance melhora se for informado, caso contrário -1. */
@@ -82,16 +94,11 @@ int main(void) {
   T = gsl_rng_default;
   engine = gsl_rng_alloc(T);
 
-   printf("lambda: ");
-   scanf("%lf", &lambda);
+  printf("lambda: ");
+  scanf("%lf", &lambda);
 
   // mcmc (McCormick + ASIS)
   for (int i = 0; i < burnin + mc; i++) {
-
-    // fornecer parâmetros reais
-    // p[0] = -5.4;
-    // p[1] = 0.99;
-    // p[2] = 0.25;
 
     printf("%06d: %9.5lf %7.5lf %.5lf\n", i + 1, p[0], p[1], p[2]);
 
@@ -100,8 +107,6 @@ int main(void) {
     C = p[2] / (1 - pow(p[1], 2));
 
     for (int j = 0; j < n; j++) {
-
-      // lambda = 0.71;
 
       x1 = D1(m, y + j, p, m, C, lambda);
       x2 = D2(m, y + j, p, C, lambda);
@@ -190,8 +195,8 @@ int main(void) {
 
   printf("\nmu: %11.5lf (%.2f%%)\nphi: %10.5lf (%.2f%%)\nsigma2: %.5lf (%.2f%%)\n",
          s[0] / (mc / thin), a[2] * 100 / (burnin + mc), s[1] / (mc / thin),
-         a[1] * 100 / (burnin + mc),
-         s[2] / (mc / thin), a[0] * 100 / (burnin + mc));
+         a[1] * 100 / (burnin + mc), s[2] / (mc / thin),
+         a[0] * 100 / (burnin + mc));
 
   t = time(NULL) - t;
   printf("\nTempo de execução: %ldmin %lds (%0.2f Rodadas/s)\n",
@@ -226,7 +231,6 @@ double mu_media(double *h, double *p, double h0, int n) {
   double result;
 
   result = *h - *(p + 1) * h0;
-
   for (int i = 0; i < (n - 1); i++) {
     result += *(h + i + 1) - *(p + 1) * *(h + i);
   }
