@@ -277,10 +277,10 @@ Para $\phi$ foi adotada inicialmente uma \textit{priori} não informativa, contr
 O parâmetro da distribuição de $\sigma_\eta^2$ foi escolhido de maneira que uma massa considerável de probabilidade estivesse concentrada no intervalo $(0, 1)$.
 
 <<jags, eval = TRUE, results = "hide", echo = FALSE>>=
-"SELECT p AS phi, s AS sigma, k, AVG(mu) AS mu_hat, AVG(phi) AS phi_hat,
-  AVG(sigma) AS sigma_hat
-  FROM jags
-  GROUP BY p, s, k" %>%
+"SELECT p AS phi, s AS sigma, k, avg(mu) AS mu_hat, avg(phi) AS phi_hat,
+  avg(sigma) AS sigma_hat
+ FROM jags
+ GROUP BY p, s, k" %>%
     dbGetQuery(link, .) -> dados_jags
 
 dados_jags %>%

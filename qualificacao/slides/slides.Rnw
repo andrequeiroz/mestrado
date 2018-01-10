@@ -629,10 +629,10 @@ link <- dbConnect(RSQLite::SQLite(), "../../dados/svsim.db")
 \end{frame}
 
 <<jags, eval = TRUE, results = "hide", echo = FALSE>>=
-"SELECT p AS phi, s AS sigma, k, AVG(mu) AS mu_hat, AVG(phi) AS phi_hat,
-  AVG(sigma) AS sigma_hat
-  FROM jags
-  GROUP BY p, s, k" %>%
+"SELECT p AS phi, s AS sigma, k, avg(mu) AS mu_hat, avg(phi) AS phi_hat,
+  avg(sigma) AS sigma_hat
+ FROM jags
+ GROUP BY p, s, k" %>%
     dbGetQuery(link, .) -> dados_jags
 
 dados_jags %>%
